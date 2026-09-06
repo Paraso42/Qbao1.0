@@ -133,12 +133,12 @@ describe('roulette 路由校验', () => {
     expect(res.status).toBe(422);
   });
 
-  it('未开放组合（如 red+odd）→ 422', async () => {
+  it('未知组合值（如 red+purple）→ 422', async () => {
     const app = createApp();
     const res = await request(app)
       .post('/api/v1/roulette/spin')
       .set('Authorization', 'Bearer ' + token)
-      .send({ roundId: okBody.roundId, bets: [{ type: 'combo', value: 'red+odd', amount: 10 }] });
+      .send({ roundId: okBody.roundId, bets: [{ type: 'combo', value: 'red+purple', amount: 10 }] });
     expect(res.status).toBe(422);
   });
 });
@@ -231,6 +231,22 @@ describe('roulette 业务结算', () => {
     installFakePool(happyMatchers());
     const app2 = createApp();
     const r2 = await post(app2, { roundId: rid(), bets: [{ type: 'combo', value: 'red+even', amount: 10 }] });
+    expect(r2.body.bets[0].hit).toBe(false);
+    expect(r2.body.payout).toBe(0);
+  });
+
+  it('组合 红+奇（自由双选）：开 21 命中 4×；开 12（红偶）未中', async () => {
+    mockNumber(21);
+    installFakePool(happyMatchers());
+    const app = createApp();
+    const r1 = await post(app, { roundId: rid(), bets: [{ type: 'combo', value: 'red+odd', amount: 10 }] });
+    expect(r1.body.bets[0].hit).toBe(true);
+    expect(r1.body.payout).toBe(40);
+
+    mockNumber(12);
+    installFakePool(happyMatchers());
+    const app2 = createApp();
+    const r2 = await post(app2, { roundId: rid(), bets: [{ type: 'combo', value: 'red+odd', amount: 10 }] });
     expect(r2.body.bets[0].hit).toBe(false);
     expect(r2.body.payout).toBe(0);
   });
