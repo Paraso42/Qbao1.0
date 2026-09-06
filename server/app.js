@@ -64,6 +64,7 @@ function createApp() {
   require('./src/routes/notices.routes.v2')(app);
   require('./src/routes/users.routes.v2')(app);
   require('./src/routes/points.routes')(app);
+  require('./src/routes/roulette.routes')(app);
   require('./src/routes/quiz.routes')(app);
   require('./src/routes/files.routes.v2')(app);
   require('./src/routes/issues.routes.v2')(app);

@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { GAMES, GAME_IDS, gameSrc } from './gamesManifest'
 
 describe('gamesManifest 清单完整性', () => {
-  it('包含全部四款游戏且 id 唯一', () => {
-    expect(GAME_IDS).toEqual(['2048', 'froggy', 'gridgarden', 'tetris'])
+  it('包含全部五款游戏且 id 唯一', () => {
+    expect(GAME_IDS).toEqual(['2048', 'froggy', 'gridgarden', 'tetris', 'roulette'])
     expect(new Set(GAME_IDS).size).toBe(GAME_IDS.length)
   })
 
@@ -13,7 +13,8 @@ describe('gamesManifest 清单完整性', () => {
       expect(g.src).toMatch(/^games\/[a-z0-9]+\/index\.html$/)
       expect(g.license).toBeTruthy()
       expect(g.upstream).toContain('/')
-      expect(g.commit).toMatch(/^[0-9a-f]{7}$/)
+      // 自研游戏（upstream=本仓库）无上游 commit，允许 self-built 标记
+      expect(g.commit).toMatch(/^([0-9a-f]{7}|self-built)$/)
       expect(g.desc.length).toBeGreaterThan(4)
       expect(g.kb).toBeGreaterThan(0)
     }

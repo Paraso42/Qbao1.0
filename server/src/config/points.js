@@ -70,6 +70,8 @@ module.exports = {
     ai_generate: 'AI 出题',
     ai_upload: 'AI 解析上传',
     file_extend: '文件池续期',
+    roulette_bet: '轮盘押注',
+    roulette_win: '轮盘赢彩',
     admin_adjust: '管理员调整',
     expiry_reset: '学期积分清零',
   },

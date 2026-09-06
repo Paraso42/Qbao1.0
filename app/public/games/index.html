@@ -52,6 +52,7 @@
   #userbox { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); }
   #userbox .guest { color: var(--muted); }
   #userbox .pill { background: var(--brand-light); color: var(--brand); padding: 4px 10px; border-radius: 999px; font-weight: 600; }
+  #userbox .pts { background: var(--brand-light); color: var(--ok); padding: 4px 10px; border-radius: 999px; font-weight: 700; }
   #backlink { color: var(--brand); text-decoration: none; font-size: 13px; font-weight: 600; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; }
   #backlink:hover { background: var(--brand-light); }
   main {
@@ -98,7 +99,7 @@
 <body>
 <header>
   <div class="logo"><span class="pad">🎮</span> Qbao 游戏空间</div>
-  <div id="userbox"><span id="who" class="guest">加载中…</span><a id="backlink" href="../index.html">返回 Qbao</a></div>
+  <div id="userbox"><span id="ptsBox" class="pts" style="display:none"></span><span id="who" class="guest">加载中…</span><a id="backlink" href="../index.html">返回 Qbao</a></div>
 </header>
 <p class="guest-note" id="guestNote" style="display:none">当前为游客模式：可试玩，成绩不保存。登录 Qbao 后成绩将按账号保存。</p>
 <main>
@@ -130,6 +131,14 @@
     <span class="meta"><span class="tag fun">休闲</span><span class="score"></span></span>
     <span class="go">开始游戏</span>
   </a>
+  <a class="card" href="./roulette/index.html" data-id="roulette">
+    <span class="icon">🎰</span>
+    <h2>俄罗斯轮盘</h2>
+    <p>赌场转盘：押注红/黑、奇/偶、红+偶、黑+奇或绿色(0)，小球落定按倍率翻倍结算（虚拟积分，服务端裁决）。</p>
+    <span class="meta"><span class="tag self">积分</span><span class="score"></span></span>
+    <span class="go">进入牌桌</span>
+  </a>
+
 </main>
 <footer>
   本游戏空间为 Qbao 附属休闲站点，游戏均为开源项目原版托管（MIT 许可），来源与许可对照见 <a href="./README.md">games/README.md</a>。
@@ -175,6 +184,16 @@
           var box = card.querySelector('.score');
           if (data[id]) box.textContent = fmt(id, data[id]);
         });
+      })
+      .catch(function () {});
+    fetch(base + '/api/v1/points/balance', { headers: { 'Authorization': 'Bearer ' + s.token } })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (j) {
+        var box = document.getElementById('ptsBox');
+        if (box && j && typeof j.balance === 'number') {
+          box.textContent = '积分 ' + j.balance;
+          box.style.display = 'inline-block';
+        }
       })
       .catch(function () {});
   });

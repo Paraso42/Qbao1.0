@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>俄罗斯轮盘 · Qbao 游戏空间</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="title"><span class="dot">🎰</span> 俄罗斯轮盘</div>
+  <div class="hud">
+    <span id="who" class="who">加载中…</span>
+    <span class="bal" id="bal">余额 --</span>
+  </div>
+</header>
+
+<p class="demo-note" id="demoNote" style="display:none">
+  演示模式：虚拟 <b>500</b> 分试玩，不落库不进账。登录 Qbao 后赢取真实积分。
+  <a href="../index.html">去登录/返回游戏空间</a>
+</p>
+
+<main>
+  <section class="wheel-panel">
+    <div class="wheel-wrap">
+      <canvas id="wheel" width="720" height="720"></canvas>
+      <div class="pointer" aria-hidden="true"></div>
+    </div>
+    <div class="wheel-info" id="wheelInfo">点击押注区放注，然后开始转盘</div>
+  </section>
+
+  <section class="bet-panel">
+    <div class="section-title">① 押注</div>
+    <div class="amount-row">
+      <label for="amount">每注分数</label>
+      <input id="amount" type="number" min="1" max="100000" value="10" inputmode="numeric">
+      <div class="chips">
+        <button data-v="1">1</button><button data-v="5">5</button><button data-v="10">10</button>
+        <button data-v="25">25</button><button data-v="50">50</button><button data-v="max">全部</button>
+      </div>
+    </div>
+    <div class="guide">选择注位类型（单击即放注，最多 <b>3</b> 注）：</div>
+    <div class="bet-areas">
+      <div class="area-row">
+        <button class="spot red" data-type="color" data-value="red">红 ×2</button>
+        <button class="spot black" data-type="color" data-value="black">黑 ×2</button>
+        <button class="spot odd" data-type="parity" data-value="odd">奇 ×2</button>
+        <button class="spot even" data-type="parity" data-value="even">偶 ×2</button>
+      </div>
+      <div class="area-row">
+        <button class="spot combo-a" data-type="combo" data-value="red+even">红+偶 ×4</button>
+        <button class="spot combo-b" data-type="combo" data-value="black+odd">黑+奇 ×4</button>
+        <button class="spot green" data-type="green" data-value="green">绿(0) ×35</button>
+      </div>
+    </div>
+    <div class="section-title">② 本轮注单</div>
+    <ul id="spots" class="spots"><li class="empty">还没有注位，点击上方选择</li></ul>
+    <div class="summary">
+      <span>总注：<b id="total">0</b></span>
+      <span id="capNote" class="muted"></span>
+    </div>
+    <button id="spin" class="spin-btn" disabled>开始转盘</button>
+    <p class="tip">开始后不可取消；结果由服务器裁决，命中按倍率返还。</p>
+  </section>
+</main>
+
+<div id="resultOverlay" class="overlay" style="display:none">
+  <div class="result-card">
+    <div class="rc-number" id="rcNumber">—</div>
+    <div class="rc-color" id="rcColor">—</div>
+    <div class="rc-bets" id="rcBets"></div>
+    <div class="rc-payout" id="rcPayout">派彩 +0</div>
+    <div class="rc-balance" id="rcBalance"></div>
+    <button id="rcAgain" class="spin-btn">再来一轮</button>
+  </div>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
+
+<script>window.__QBAO_GAME_ID__ = 'roulette';</script>
+<script src="../common/qbao-hook.js"></script>
+<script src="roulette.js"></script>
+</body>
+</html>

@@ -46,17 +46,43 @@
 - 玩法：井字棋 / 五子棋 / 黑白棋短回合制，客户端轮询 `GET /api/v1/games/rooms/:id`；
 - 鉴权/限流/隔离全部沿用现有体系；「单行状态 + 追加移动」设计天然支持回放。
 
-## 五、积分对接（v0 契约，未生效）
+## 五、积分对接（v1 试点已生效：俄罗斯轮盘）
 
-积分✗游戏对接口已预留（前端 `app/src/services/pointsBridge.js`，v0 仅校验与留痕，**不产生积分变动**）：
+**俄罗斯轮盘**是积分体系的第一个真实消费场景（v3.38，纯单机一轮制）。其余
+游戏事件的 pointsBridge 对接口保持 v0（仅校验与留痕，不产生积分变动）。
 
-- 事件：`game.completed`（`{ gameId, score, level, meta? }`）、`game.score`；
-- 未来端点草案：`POST /api/v1/points/events`，接入现有 `pointsService` 积分账本，
-  防刷：同游戏频率限制 + 日上限 + 服务端合理性校验（best 单调、plays 上限已有）；
+### 俄罗斯轮盘（赌场转盘）契约
+
+- 入口：games/roulette/（自研，MIT）；规则常量见 server/src/config/roulette.js（前端同名常量仅渲染）。
+- 端点：POST /api/v1/roulette/spin，body { roundId: UUID, bets: [{type, value, amount}] }，requireAuth。
+- 注位类型与倍率（命中返还含本金的总额，未中扣注金）：
+
+| 类型 | value | 倍率 | 说明 |
+| ---- | ----- | ---- | ---- |
+| color | red / black | 2× | 0（绿）不属任何颜色 |
+| parity | odd / even | 2× | 0 无奇偶 |
+| combo | red+even / black+odd | 4× | 默认仅对称两对（各 8/37）；放开全组合见 config 注释 |
+| green | green | 35× | 仅 0 命中；绿色无数字，不存在组合 70× |
+
+- 结算（服务端权威）：crypto.randomInt(0,37) 开奖 → 事务内扣注 points_ledger(reason=roulette_bet)
+  → 判定各注位 → 总派彩 >0 时 awardPoints(reason=roulette_win, refType=roulette, refId=roundId)（台账 UNIQUE 幂等兜底）。
+- 护栏：单注位 1~100000、一局 ≤3 注位、总注 ≤100000（INT 硬顶）、每日押注总额 ≤500
+  （config DAILY_STAKE_CAP，0 关闭）、既有 120/min/IP 限流。
+- 幂等：同一 roundId 重放直接返回首笔结果（roulette_bets 表 + ON CONFLICT），超时重试不会双扣；roundId 归属他人 → 409。
+- 余额与台账：users.storage_points（学期清零联动）；个人中心积分页显示「轮盘押注 / 轮盘赢彩」明细。
+  游客为演示模式（虚拟 500 分、本地随机、不落库）。
+- 组合注数学说明：默认「红+偶」「黑+奇」各 8/37 数字、4× 下庄家稳定微利；
+  若放开「红+奇」（10/37）须保留每日上限防套利。
+
+### 其余游戏事件（v0 预留，未生效）
+
+- 事件：game.completed（{ gameId, score, level, meta? }）、game.score；前端 app/src/services/pointsBridge.js 仅校验与留痕。
+- 未来端点草案：POST /api/v1/points/events，接入现有 pointsService 账本。
 - 消费场景清单（P2 立项）：通关/新高分奖励积分、每日首玩、积分购买游戏权益、
   游戏周赛榜（需排行端点）；游戏数据本身不兑换积分。
-- **成就联动预留**：现有成就体系（AchievementsTab / points claims）可作为游戏成就宿主，
-  契约 v1 以 `refType='game'` 扩展 `points/claims`。
+- 成就联动预留：现有成就体系（AchievementsTab / points claims）可作为游戏成就宿主，
+  契约 v1 以 refType=game 扩展 points/claims。
 
-> 长线观察项：`user_games_stats` 单行 JSONB 体积随游戏数增长，警戒线为单行 >64KB
-> （当前 4 款游戏 × 4 字段远低于此；超限时拆列为游戏独立列）。
+> 长线观察项：user_games_stats 单行 JSONB 体积随游戏数增长，警戒线为单行 >64KB
+> （当前 4 款 × 4 字段远低于此；超限时拆列为游戏独立列）。roulette_bets 按局落一行
+> （<1KB），v0 规模下无膨胀风险。
