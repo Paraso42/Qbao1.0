@@ -182,11 +182,11 @@ export function pickSessionBackend(bytes) {
 }
 
 // v3.36.1 账户隔离：localStorage 活动会话/考卷镜像键按账号后缀隔离（旧版全局键仅用于升级回退）
+// v3.37.1 加固：账号后缀取「内存数据属主」而非活读 localStorage —— 多标签页下活读会
+// 把本页（旧账号内存）的镜像写进其他标签页刚登录的新账号键里，是串号的另一入口。
 function activeMirrorKey(base) {
-  try {
-    const u = getUserStored()
-    if (u && u.id) return base + '_u_' + u.id
-  } catch (e) { /* 忽略 */ }
+  const uid = getStateOwnerUid()
+  if (uid) return base + '_u_' + uid
   return base
 }
 function removeLegacyMirror(base) {
@@ -393,6 +393,19 @@ export async function hydrateState(state) {
   } catch (e) { console.warn('[persist] hydrate err', e) }
 }
 
+// 跨标签页账号守卫判定（v3.37.1）：其他标签页登录/登出/切换账号（qbao_user 变化）时，
+// 本页内存数据属主已过期 → 应冻结同步并整页重建，防止旧账号内存写入新账号键。
+// 纯函数便于单测：返回 true 表示本页需要重建。
+export function isAccountStorageCrossChange(e, ownerUid) {
+  if (!e || e.key !== 'qbao_user') return false
+  let curId = null
+  try {
+    const u = e.newValue ? JSON.parse(e.newValue) : null
+    if (u && u.id) curId = String(u.id)
+  } catch (err) { return true }
+  return curId !== (ownerUid ? String(ownerUid) : null)
+}
+
 export function getChStrategy(state, cid) {
   const ch = state.chapters[cid]
   if (!ch) return null
@@ -505,13 +518,15 @@ export function saveState(state) {
     // v3.36.1 登录门禁：只允许登录账号落盘（账号专属键；绝不写公共键）。
     // 未登录不产生任何持久化副作用（含 IDB 大字段与活动镜像），数据只在内存，
     // 登录后按账号整页重建 —— 从机制上杜绝匿名数据与多账号互相串扰。
-    const user = getUserStored()
-    if (!user || !user.id) {
+    // v3.37.1 加固：写入键取「内存数据属主」而非活读 localStorage —— 多标签页下
+    // 本页内存永远只属于启动时加载的账号，写盘绝不漂移到其他标签页刚登录的账号键。
+    const uid = getStateOwnerUid()
+    if (!uid) {
       // 登录门禁：拒绝匿名落盘；内存可能已含匿名期改动，标记后强制下次登录重建
       _anonymousMutated = true
       return { ok: false }
     }
-    localStorage.setItem(CLOUD_STORAGE_PREFIX + user.id, serialized)
+    localStorage.setItem(CLOUD_STORAGE_PREFIX + uid, serialized)
     // v3.30：大字段（题目/答案/历史）空闲时写 IndexedDB，不再占 localStorage
     scheduleFullIdbWrite(state)
     // 活动会话同步写（答题进度刷新不丢）：当前轮次 + 进行中的大考卷
@@ -522,9 +537,9 @@ export function saveState(state) {
     if (e && e.name === 'QuotaExceededError' && tryQuotaRecovery()) {
       // 自动清理可恢复的临时镜像键后重试一次（大会话镜像已迁 IDB，这里清的是历史遗留）
       try {
-        const user = getUserStored()
-        if (!user || !user.id) return { ok: false }
-        localStorage.setItem(CLOUD_STORAGE_PREFIX + user.id, serialized)
+        const uid = getStateOwnerUid()
+        if (!uid) return { ok: false }
+        localStorage.setItem(CLOUD_STORAGE_PREFIX + uid, serialized)
         scheduleFullIdbWrite(state)
         saveActiveSession(state)
         saveActiveExam(state)

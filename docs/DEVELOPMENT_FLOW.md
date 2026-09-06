@@ -66,6 +66,7 @@
 - `server`: `npx vitest run` 全绿（基线 166 用例，v3.35 后 187）
 - `app`: `npx vitest run` 全绿（基线 175 用例，v3.35 后 177，v3.36 后 203）；**登录门禁（v3.36.1）：未登录整页登录门禁、匿名零写盘（公共键停用）、匿名改动锁重建**
 - **手机竖屏检查（v3.36 新增，涉及展示层改动时必做）**：≤768px（360/390 两档）无横向滚动、输入控件 ≥16px（iOS 不聚焦缩放）、主操作按钮 ≤1 屏内可达、无「查看报告」章节入口、活动会话大键不落 localStorage（>1MB 走 IndexedDB）
+- **科目总览数字自洽检查（v3.37 新增，涉及看板/统计改动时必做）**：总览与题库 tab 章节头/侧栏题量同数；环形图分母 = 图例合计；累计作答 = 客观 + 主观（可验算）；无实答客观题显示「—」而非 0%/100%；跳过（-1）不计入正确率；科目级数字 = Σ章节（单测锁定）
 - `scripts`: `node --test scripts/installer-lib.test.js` 全绿（发布工具，零依赖）
 - `desktop`: `node --check main.js preload.js updater.js updater-util.js` + `node --test desktop/test` 全绿
 - `npx eslint .`（app/server）0 error

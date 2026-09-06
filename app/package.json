@@ -1,7 +1,7 @@
 {
   "name": "qbao-app",
   "private": true,
-  "version": "3.36.0",
+  "version": "3.37.0",
   "type": "module",
   "description": "Qbao 前端（Vue 3 + Vite，singlefile 构建供桌面 file:// 加载）",
   "scripts": {

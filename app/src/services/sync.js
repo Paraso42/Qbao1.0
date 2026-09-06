@@ -3,9 +3,9 @@
 // 职责：带 rev 乐观锁的全量同步、409 冲突合并、失败可见化与自动重试。
 // 引擎与 UI/store 解耦：createSyncEngine(ctx) 注入上下文。
 // ============================================================
-import { fetchWithAuth, getToken, getStoredUser } from './api'
+import { fetchWithAuth, getToken, effectiveToken, getStoredUser } from './api'
 import { stripAiSecretsFromState } from './aiKeys'
-import { migrateState, CLOUD_STORAGE_PREFIX, buildSkeleton, scheduleFullIdbWrite } from './persistence'
+import { migrateState, CLOUD_STORAGE_PREFIX, buildSkeleton, scheduleFullIdbWrite, getStateOwnerUid } from './persistence'
 import { rebuildChapterAnswersFromSets } from './questions'
 
 export const SYNC_PENDING_KEY = 'qbao_sync_pending'
@@ -296,9 +296,10 @@ export function mergeStates(localState, cloudState) {
 export function persistMergedState(merged) {
   // 账号隔离（与 persistence.saveState 一致）：登录态只写账号键；
   // v3.36.1 登录门禁：未登录一律不落盘（公共键永久停用）
-  const user = getStoredUser()
-  if (!user || !user.id) return
-  const target = CLOUD_STORAGE_PREFIX + user.id
+  // v3.37.1 加固：写入键取内存数据属主而非活读 localStorage（多标签页串号根治）
+  const uid = getStateOwnerUid()
+  if (!uid) return
+  const target = CLOUD_STORAGE_PREFIX + uid
   try {
     localStorage.setItem(target, JSON.stringify(buildSkeleton(merged)))
     scheduleFullIdbWrite(merged)
@@ -362,7 +363,7 @@ export function createSyncEngine(ctx) {
   // 返回 { changed, addedCount }；changed 表示本地状态被合并更新。
   async function pullAndMerge() {
     if (!canSync()) return { changed: false, addedCount: 0 }
-    if (!ctx.isOnline() || !getToken()) return { changed: false, addedCount: 0 }
+    if (!ctx.isOnline() || !effectiveToken()) return { changed: false, addedCount: 0 }
     try {
       const res = await fetchWithAuth('/data')
       if (!res || !res.ok) return { changed: false, addedCount: 0 }
@@ -432,7 +433,7 @@ export function createSyncEngine(ctx) {
   async function flushSync() {
     if (!canSync()) return
     if (!_syncingReady) { setSyncPending(true); updateStatus(); return }
-    if (_syncInFlight || !ctx.isOnline() || !getToken()) return
+    if (_syncInFlight || !ctx.isOnline() || !effectiveToken()) return
     _syncInFlight = true
     updateStatus()
     try {
@@ -518,7 +519,7 @@ export function createSyncEngine(ctx) {
   // 由 saveState() 调用：防抖 2s 后推送全量状态
   function scheduleSync() {
     if (!canSync()) return
-    if (!ctx.isOnline() || !getToken()) return
+    if (!ctx.isOnline() || !effectiveToken()) return
     setSyncPending(true)
     updateStatus()
     if (!_syncingReady) return // 启动未就绪：保留 pending，就绪后 resumePendingSync 补推
@@ -529,14 +530,14 @@ export function createSyncEngine(ctx) {
   // 登录/恢复后回放未同步数据（返回 flushSync 的 promise，便于调用方串行化等待）
   function resumePendingSync() {
     if (!canSync()) return Promise.resolve()
-    if (getSyncPending() && ctx.isOnline() && getToken()) return flushSync()
+    if (getSyncPending() && ctx.isOnline() && effectiveToken()) return flushSync()
     return Promise.resolve()
   }
 
   // —— 轮询：检测其他端写入（轻量 rev 检查，变化才拉全量合并） ——
   async function pollTick() {
     if (!canSync()) return
-    if (_syncInFlight || !ctx.isOnline() || !getToken()) return
+    if (_syncInFlight || !ctx.isOnline() || !effectiveToken()) return
     try {
       const res = await fetchWithAuth('/data/rev')
       if (!res || !res.ok) {
@@ -583,7 +584,7 @@ export function createSyncEngine(ctx) {
     if (_unloadBound || typeof window === 'undefined') return
     _unloadBound = true
     const flushOnUnload = () => {
-      if (!canSync() || !_syncingReady || _syncInFlight || !getSyncPending() || !ctx.isOnline() || !getToken()) return
+      if (!canSync() || !_syncingReady || _syncInFlight || !getSyncPending() || !ctx.isOnline() || !effectiveToken()) return
       // P1.2：与 flushSync 相同的空推检测 —— 内容未变化（如 in-flight 刚完成）不发重复 PUT
       const pp = preparePush()
       if (pp.noop || pp.pushJson === null) return

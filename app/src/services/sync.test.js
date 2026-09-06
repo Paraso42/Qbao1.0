@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mergeStates, createSyncEngine, getSyncPending, setSyncPending, setAccountSwitching } from './sync'
+import { mergeStates, createSyncEngine, getSyncPending, setSyncPending, setAccountSwitching, persistMergedState } from './sync'
+import * as persistenceMod from './persistence'
+import { pinToken, unpinToken } from './api'
 
 // —— P1.2 引擎级测试基建：内存 localStorage + fetch mock ——
 function makeLocalStorageStub(seed = {}) {
@@ -21,11 +23,15 @@ function installFetchMock(opts = {}) {
     getCount: 0,
     revCount: 0,
     putBodies: [],
+    authHeaders: [],
     conflictLeft: opts.conflictPutCount || 0,
   }
+  st.authHeaders = []
   globalThis.fetch = async (url, options = {}) => {
     const p = String(url)
     const method = options.method || 'GET'
+    const authH = (options.headers && options.headers.Authorization) || null
+    if (authH) st.authHeaders.push(authH)
     if (p.endsWith('/data/rev')) {
       st.revCount++
       return { ok: true, status: 200, json: async () => ({ rev: st.cloudRev }) }
@@ -60,6 +66,8 @@ function baseState() {
 }
 
 async function makeEngine(storage) {
+  // v3.37.1 属主钉扎：模拟真实启动顺序（loadState 记录内存属主 = 播种的 qbao_user）
+  if (globalThis.localStorage) { try { persistenceMod.loadState() } catch (e) { /* 忽略 */ } }
   const holder = { state: baseState() }
   let notified = []
   const engine = createSyncEngine({
@@ -637,5 +645,44 @@ describe('引擎账号守卫 (v3.36.1)', () => {
     await engine.flushSync()
     expect(fetchSt.putCount).toBe(0)
     expect(fetchSt.getCount).toBe(0)
+  })
+})
+describe('v3.37.1 多标签页账号钉扎', () => {
+  let storage
+  beforeEach(() => {
+    storage = makeLocalStorageStub({ qbao_token: 'tok', qbao_user: JSON.stringify({ id: 'u1', username: 'a' }) })
+    globalThis.localStorage = storage
+    persistenceMod.loadState() // 属主 = u1
+    pinToken('PIN_TOK_U1')
+  })
+  afterEach(() => { delete globalThis.localStorage; delete globalThis.fetch; unpinToken() })
+
+  it('persistMergedState 落盘取内存属主（其他标签页已切账号也不写新键）', () => {
+    storage.setItem('qbao_user', JSON.stringify({ id: 'u2', username: 'b' }))
+    const merged = { subjects: { s9: { id: 's9', name: '合并数据' } }, chapters: {}, history: [] }
+    persistMergedState(merged)
+    expect(storage.getItem('quizEngineState_cloud_u1')).toContain('合并数据')
+    expect(storage.getItem('quizEngineState_cloud_u2')).toBeNull()
+  })
+
+  it('引擎请求携带钉扎令牌（活读令牌被其他标签页替换也不漂移）', async () => {
+    const fm = installFetchMock()
+    const { engine } = await makeEngine(storage)
+    storage.setItem('qbao_token', 'OTHER_TAB_TOKEN')
+    engine.setSyncingReady(true)
+    await engine.flushSync()
+    expect(fm.putCount).toBe(1)
+    expect(fm.authHeaders.length).toBeGreaterThan(0)
+    expect(fm.authHeaders.every((h) => h === 'Bearer PIN_TOK_U1')).toBe(true)
+  })
+
+  it('拉取合并后本地骨架写属主键（跨标签页场景）', async () => {
+    installFetchMock({ cloudState: { subjects: { s8: { id: 's8', name: '云端科目' } }, chapters: {}, history: [] }, cloudRev: 3 })
+    const { engine } = await makeEngine(storage)
+    storage.setItem('qbao_user', JSON.stringify({ id: 'u2', username: 'b' }))
+    engine.setSyncingReady(true)
+    await engine.pullAndMerge()
+    expect(storage.getItem('quizEngineState_cloud_u1')).toBeTruthy()
+    expect(storage.getItem('quizEngineState_cloud_u2')).toBeNull()
   })
 })

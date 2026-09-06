@@ -88,17 +88,42 @@ export function setStoredUser(u) { if (u) localStorage.setItem('qbao_user', JSON
 
 export function clearStoredAuth() { setToken(null); setStoredUser(null) }
 
+// —— 会话令牌钉扎（v3.37.1 多标签页账号守卫核心）——
+// localStorage qbao_token/qbao_user 属「整个浏览器档案」的最近登录账号；本标签页的
+// 内存数据/业务请求必须始终使用「本标签页启动/登录时」钉扎的令牌，否则其他标签页
+// 切换账号后，本页会把旧账号的内存数据发到新账号上（跨标签串号，见 persistence/sync）。
+let _pinToken = null
+let _authStaleHook = null
+export function pinToken(t) { _pinToken = t || null }
+export function unpinToken() { _pinToken = null }
+export function getPinnedToken() { return _pinToken }
+// 请求令牌真源：钉扎 > 活读（钉扎缺失（如未初始化）才回退活读）
+export function effectiveToken() { return _pinToken !== null ? _pinToken : getToken() }
+// 钉扎令牌已失效（其他标签页重登/失效）→ 由 boot 注册整页重建（冻结同步上下文）
+export function setAuthStaleHook(fn) { _authStaleHook = fn }
+export function fireAuthStale() { try { if (typeof _authStaleHook === 'function') _authStaleHook() } catch (e) { /* 忽略 */ } }
+
 export async function fetchWithAuth(path, options = {}) {
   const isFormData = options.body instanceof FormData
   const headers = isFormData ? {} : { 'Content-Type': 'application/json' }
   if (options.headers) Object.assign(headers, options.headers)
-  if (getToken()) headers['Authorization'] = 'Bearer ' + getToken()
+  const tok = effectiveToken()
+  if (tok) headers['Authorization'] = 'Bearer ' + tok
   const fetchOpts = { method: options.method, headers }
   if (options.body) fetchOpts.body = options.body
   if (options.signal) fetchOpts.signal = options.signal
   if (options.keepalive) fetchOpts.keepalive = true // T10: 页面关闭前尽力推送
   const res = await fetch(API_BASE + path, fetchOpts)
-  if (res.status === 401) { clearStoredAuth(); return null }
+  if (res.status === 401) {
+    // 401 清登出只允许发生在「本页钉扎令牌 == 档案活读令牌」时（本页即登录上下文）；
+    // 若档案已被其他标签页换到别的账号，绝不清理（会把别人登出），而是触发整页重建
+    if (!tok || tok === getToken()) {
+      clearStoredAuth()
+    } else {
+      fireAuthStale()
+    }
+    return null
+  }
   return res
 }
 

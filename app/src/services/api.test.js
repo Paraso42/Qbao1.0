@@ -186,3 +186,58 @@ describe('apiFetch / apiHandle / readApiErrorSafe (P2.3)', () => {
   })
 })
 
+describe('v3.37.1 会话令牌钉扎与 401 语境守卫', () => {
+  let storage
+  let mod
+  beforeEach(async () => {
+    storage = makeLocalStorageStub({ qbao_token: 'LIVE_TOK', qbao_user: JSON.stringify({ id: 'u1', username: 'a' }) })
+    globalThis.localStorage = storage
+    vi.resetModules()
+    mod = await import('./api')
+  })
+  afterEach(() => { delete globalThis.localStorage })
+
+  it('effectiveToken 优先钉扎令牌；未钉扎回退活读', () => {
+    expect(mod.effectiveToken()).toBe('LIVE_TOK')
+    mod.pinToken('PIN_TOK')
+    storage.setItem('qbao_token', 'OTHER_LIVE')
+    expect(mod.effectiveToken()).toBe('PIN_TOK')
+    mod.unpinToken()
+    expect(mod.effectiveToken()).toBe('OTHER_LIVE')
+  })
+
+  it('fetchWithAuth 携带钉扎令牌（活读令牌被其他标签页替换也不漂移）', async () => {
+    let seen = null
+    globalThis.fetch = async (url, options = {}) => { seen = (options.headers && options.headers.Authorization) || null; return { ok: true, status: 200, json: async () => ({}) } }
+    mod.pinToken('PIN_TOK')
+    storage.setItem('qbao_token', 'OTHER_LIVE')
+    await mod.fetchWithAuth('/data')
+    expect(seen).toBe('Bearer PIN_TOK')
+    delete globalThis.fetch
+  })
+
+  it('401 且钉扎 != 活读（其他标签页换账号）→ 不清理登出态，触发整页重建钩子', async () => {
+    let staleFired = 0
+    let cleared = 0
+    mod.setAuthStaleHook(() => { staleFired++ })
+    globalThis.fetch = async () => ({ ok: false, status: 401, json: async () => ({}) })
+    mod.pinToken('PIN_TOK')
+    storage.setItem('qbao_token', 'OTHER_LIVE')
+    const res = await mod.fetchWithAuth('/data')
+    expect(res).toBeNull()
+    expect(staleFired).toBe(1)
+    expect(storage.getItem('qbao_user')).not.toBeNull() // 不清别人账号
+    expect(storage.getItem('qbao_token')).toBe('OTHER_LIVE')
+    delete globalThis.fetch
+  })
+
+  it('401 且钉扎 == 活读（本页即登录上下文）→ 正常清理登出', async () => {
+    globalThis.fetch = async () => ({ ok: false, status: 401, json: async () => ({}) })
+    mod.pinToken('LIVE_TOK')
+    const res = await mod.fetchWithAuth('/data')
+    expect(res).toBeNull()
+    expect(storage.getItem('qbao_user')).toBeNull()
+    expect(storage.getItem('qbao_token')).toBeNull()
+    delete globalThis.fetch
+  })
+})

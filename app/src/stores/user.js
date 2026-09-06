@@ -2,6 +2,7 @@
 import { defineStore } from 'pinia'
 import {
   getToken, getStoredUser, setToken, setStoredUser, clearStoredAuth,
+  pinToken, unpinToken,
   apiLogin, apiRegister
 } from '../services/api'
 import { getStateOwnerUid, hadAnonymousMutations } from '../services/persistence'
@@ -36,6 +37,8 @@ export const useUserStore = defineStore('user', {
       this.isOnline = true
       setToken(token)
       setStoredUser(user)
+      // v3.37.1 会话令牌钉扎：本标签页从此只以该令牌请求（防多标签页活读漂移串号）
+      pinToken(token)
       if (switching || dirty) {
         try {
           if (typeof window !== 'undefined' && window.location && typeof window.location.reload === 'function') {
@@ -60,6 +63,7 @@ export const useUserStore = defineStore('user', {
       this.token = null
       this.user = null
       this.isOnline = false
+      unpinToken()
       clearStoredAuth()
     },
     isAdmin() {

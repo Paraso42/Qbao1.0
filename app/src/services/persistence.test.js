@@ -29,6 +29,8 @@ describe('persistence.saveState (T12)', () => {
     return import('./persistence').then((m) => {
       mod = m
       m.setPersistWarningHook((msg, fatal) => hooks.push({ msg, fatal }))
+      // v3.37.1 写盘键 = 内存数据属主：按真实启动顺序先 loadState 播种属主
+      m.loadState()
     })
   })
 
@@ -161,6 +163,46 @@ describe('persistence.saveState (T12)', () => {
     expect(hooks.some((h) => !h.fatal && h.msg.includes('接近上限'))).toBe(true)
     expect(storage.getItem(mod.CLOUD_STORAGE_PREFIX + '7')).toBeTruthy()
   })
+  it('v3.37.1 跨标签页串号根治：saveState 写盘目标 = 内存属主，活读账号变化不影响', () => {
+    // 本页启动属主 u1(7)（beforeEach 已 loadState）
+    const state = { subjects: { s1: { id: 's1', name: '本页旧账号数据' } }, chapterMaterials: {}, aiTaskQueue: [] }
+    // 模拟其他标签页已把档案登录态切到别的账号（活读 getUserStored 会拿到它）
+    storage.setItem('qbao_user', JSON.stringify({ id: 2, username: 'other' }))
+    const res = mod.saveState(state)
+    expect(res.ok).toBe(true)
+    // 写入仍是本页属主 7 的键，绝不写其他账号键（旧 bug：写入 quizEngineState_cloud_2）
+    expect(storage.getItem('quizEngineState_cloud_7')).toContain('本页旧账号数据')
+    expect(storage.getItem('quizEngineState_cloud_2')).toBeNull()
+  })
+
+  it('v3.37.1 活动会话镜像键取内存属主（跨标签页不写新账号键）', () => {
+    const state = {
+      currentChapterId: 'c1',
+      chapters: {
+        c1: {
+          id: 'c1', name: '章1', strategy: { errPct: 20 },
+          questions: [{ id: 1, question: 'Q1' }], userAnswers: [0], currentQuizSetIdx: 0,
+          quizSets: [{ questions: [{ id: 1, question: 'Q1' }], userAnswers: [0], currentIdx: 0, createdAt: 1 }],
+        },
+      },
+      subjects: {},
+    }
+    storage.setItem('qbao_user', JSON.stringify({ id: 2, username: 'other' }))
+    expect(mod.saveState(state).ok).toBe(true)
+    expect(storage.getItem('qbao_active_session_u_7')).toBeTruthy()
+    expect(storage.getItem('qbao_active_session_u_2')).toBeNull()
+  })
+
+  it('v3.37.1 isAccountStorageCrossChange：跨标签页账号变化判定（纯函数）', () => {
+    expect(mod.isAccountStorageCrossChange({ key: 'qbao_user', newValue: JSON.stringify({ id: 'u2' }) }, 'u1')).toBe(true)
+    expect(mod.isAccountStorageCrossChange({ key: 'qbao_user', newValue: JSON.stringify({ id: 'u1' }) }, 'u1')).toBe(false)
+    expect(mod.isAccountStorageCrossChange({ key: 'qbao_user', newValue: null }, 'u1')).toBe(true)
+    expect(mod.isAccountStorageCrossChange({ key: 'qbao_user', newValue: JSON.stringify({ id: 'u2' }) }, null)).toBe(true)
+    expect(mod.isAccountStorageCrossChange({ key: 'qbao_user', newValue: null }, null)).toBe(false)
+    expect(mod.isAccountStorageCrossChange({ key: 'other_key', newValue: 'x' }, 'u1')).toBe(false)
+    expect(mod.isAccountStorageCrossChange({ key: 'qbao_user', newValue: '{bad json' }, 'u1')).toBe(true)
+  })
+
 })
 
 describe('登录门禁：未登录拒绝读写 (v3.36.1)', () => {
@@ -197,6 +239,15 @@ describe('登录门禁：未登录拒绝读写 (v3.36.1)', () => {
     expect(storage._map.size).toBe(0) // 全程无任何写入副作用
     expect(state.quizSession).toEqual({ q: 1 }) // 瞬态字段仍恢复
   })
+
+  it('v3.37.1 属主为 null（门禁态）时 saveState 拒绝，即使档案残留账号键', () => {
+    // 异常档案：无属主但 qbao_user 存在 → 一律不写、打匿名改动标（防伪造账号键）
+    storage.setItem('qbao_user', JSON.stringify({ id: 7, username: 'a' }))
+    const state = { subjects: { s1: { id: 's1', name: 'X' } }, chapters: {} }
+    expect(mod.saveState(state).ok).toBe(false)
+    expect(mod.hadAnonymousMutations()).toBe(true)
+    expect(storage.getItem(mod.CLOUD_STORAGE_PREFIX + '7')).toBeNull()
+  })
 })
 
 
@@ -210,6 +261,7 @@ describe('大考卷活动会话 (round4)', () => {
     storage.setItem('qbao_user', JSON.stringify({ id: 7, username: 'a' }))
     vi.resetModules()
     mod = await import('./persistence')
+    mod.loadState()
   })
   const AKEY = () => 'qbao_active_exam_u_7'
   afterEach(() => { delete globalThis.localStorage })
@@ -269,6 +321,7 @@ describe('存储配额治理 (v3.36)', () => {
     vi.resetModules()
     mod = await import('./persistence')
     mod.setPersistWarningHook((msg, fatal) => hooks.push({ msg, fatal }))
+    mod.loadState()
   })
   afterEach(() => { delete globalThis.localStorage })
 
@@ -419,6 +472,7 @@ describe('账户隔离加固 (v3.36.1)', () => {
   it('活动会话镜像键按账号分区（登录态写专属键并清除旧全局键）', async () => {
     const m = await load()
     storage.setItem('qbao_user', JSON.stringify({ id: 7, username: 'a' }))
+    m.loadState() // v3.37.1 写盘键取内存属主：先播种属主
     // 预置旧版全局镜像键（跨账号残留模拟）
     storage.setItem(m.ACTIVE_SESSION_KEY, 'LEGACY')
     const state = {
@@ -442,6 +496,7 @@ describe('账户隔离加固 (v3.36.1)', () => {
   it('hydrate 恢复优先读账号专属镜像键，旧全局键仅作升级回退', async () => {
     const m = await load()
     storage.setItem('qbao_user', JSON.stringify({ id: 7, username: 'a' }))
+    m.loadState() // v3.37.1 镜像键取内存属主：先播种属主
     // 旧全局键（模拟升级前遗留）：其 cid 存在于骨架 → 升级后首次恢复仍可回填
     storage.setItem(m.ACTIVE_SESSION_KEY, JSON.stringify({ cid: 'c1', qsIdx: 0, questions: [{ id: 1, question: 'Q1' }], userAnswers: [0], currentIdx: 0 }))
     const skeleton = { currentChapterId: 'c1', chapters: { c1: { id: 'c1', name: '章1', strategy: { errPct: 20 } } }, subjects: {} }

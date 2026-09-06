@@ -10,8 +10,8 @@
       <div v-for="t in tabs" :key="t.key" class="tab" :class="{ active: tab === t.key }" @click="tab = t.key">{{ t.label }}</div>
     </div>
 
-    <!-- 总览（P2.2 拆分：SubjectOverviewPanel） -->
-    <SubjectOverviewPanel v-if="tab === 'overview'" />
+    <!-- 总览（v3.37 重构：专业看板；点击章节行 drill-down 到题库 tab） -->
+    <SubjectOverviewPanel v-if="tab === 'overview'" @open-bank="onOpenBank" />
     <!-- 题库 -->
     <div v-else-if="tab === 'questionbank'" class="sd-content">
       <div class="qbank-toolbar">
@@ -242,6 +242,11 @@ const qbLimits = reactive({})
 function toggleQbGroup(cid) {
   if (openQbGroups.has(cid)) openQbGroups.delete(cid)
   else openQbGroups.add(cid)
+}
+// v3.37：总览看板章节行 drill-down → 题库 tab 并展开该章节分组
+function onOpenBank(cid) {
+  tab.value = 'questionbank'
+  openQbGroups.add(cid)
 }
 function toggleQbRound(key) {
   if (openQbRounds.has(key)) openQbRounds.delete(key)

@@ -75,19 +75,55 @@ describe('user store 账号切换重建 (v3.36.1)', () => {
     expect(user.isOnline).toBe(true)
   })
 
-  it('匿名期内存被改动（saveState 被拒）→ 同账号重新登录也强制重建', async () => {
+  it('登出后写盘仍限内存属主自己的键（v3.37.1 属主钉扎，不产生匿名脏标）', async () => {
     const persistence = await import('../services/persistence')
     persistence.loadState()
     expect(persistence.getStateOwnerUid()).toBe('u1')
-    // 模拟匿名期：登出后内存被改动（saveState 被拒绝并打标）
+    // 模拟登出（本页清档案登录态）后仍有写盘：属主钉扎 → 写回属主自己的键，绝不漂移，也不进匿名态
     storage.removeItem('qbao_token')
     storage.removeItem('qbao_user')
-    persistence.saveState({ subjects: { sx: { id: 'sx', name: '匿名尝试' } }, chapters: {} })
-    expect(persistence.hadAnonymousMutations()).toBe(true)
+    persistence.saveState({ subjects: { sx: { id: 'sx', name: '登出后写盘' } }, chapters: {} })
+    expect(persistence.hadAnonymousMutations()).toBe(false)
+    expect(storage.getItem('quizEngineState_cloud_u1')).toContain('登出后写盘')
+    expect(storage.getItem('quizEngineState_cloud_u2')).toBeNull()
     const { useUserStore } = await import('./user')
     const user = useUserStore()
-    // 同一账号 u1 重新登录（属主不变）→ 因匿名改动必须整页重建
+    // 同一账号 u1 重新登录（属主不变且无脏标）→ 不重建（与旧版匿名脏标强制重建场景分离：
+    // 真正的门禁期脏改动由「未登录 loadState（属主 null）→ saveState 拒绝打标」路径覆盖）
     user.applyAuth({ token: 'tokA2', user: { id: 'u1', username: 'a' } })
-    expect(reloadSpy).toHaveBeenCalledTimes(1)
+    expect(reloadSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('v3.37.1 applyAuth 会话令牌钉扎 (user store)', () => {
+  let storage
+  let reloadSpy
+  beforeEach(async () => {
+    storage = makeLocalStorageStub({
+      qbao_token: 'tokA',
+      qbao_user: JSON.stringify({ id: 'u1', username: 'a' }),
+      quizEngineState_cloud_u1: JSON.stringify({ subjects: {}, chapters: {}, history: [], lastScreen: 'start' }),
+    })
+    globalThis.localStorage = storage
+    reloadSpy = vi.fn()
+    vi.stubGlobal('window', { location: { reload: reloadSpy } })
+    setActivePinia(createPinia())
+    vi.resetModules()
+  })
+  afterEach(() => {
+    delete globalThis.localStorage
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('applyAuth 钉扎会话令牌；logout 解除钉扎', async () => {
+    const api = await import('../services/api')
+    const { useUserStore } = await import('./user')
+    const user = useUserStore()
+    user.applyAuth({ token: 'tokA2', user: { id: 'u1', username: 'a' } })
+    expect(api.getPinnedToken()).toBe('tokA2')
+    expect(api.effectiveToken()).toBe('tokA2')
+    user.logout()
+    expect(api.getPinnedToken()).toBeNull()
   })
 })

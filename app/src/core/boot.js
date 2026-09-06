@@ -7,8 +7,9 @@ import { useUserStore } from '../stores/user'
 import { useSyncStore } from '../stores/sync'
 import { useUiStore } from '../stores/ui'
 import { createSyncEngine } from '../services/sync'
-import { setPersistWarningHook, hydrateState, setStateSource, flushBigFieldsNow, getStateOwnerUid } from '../services/persistence'
-import { getToken } from '../services/api'
+import { setPersistWarningHook, hydrateState, setStateSource, flushBigFieldsNow, getStateOwnerUid, isAccountStorageCrossChange } from '../services/persistence'
+import { getToken, pinToken, setAuthStaleHook } from '../services/api'
+import { setAccountSwitching } from '../services/sync'
 import { initSecureKeyStore } from '../services/aiKeys'
 import { useQuizStore } from '../stores/quiz'
 import { useAiStore } from '../stores/ai'
@@ -23,6 +24,10 @@ export function initApp(pinia) {
   const user = useUserStore(pinia)
   const syncStore = useSyncStore(pinia)
   const ui = useUiStore(pinia)
+
+  // v3.37.1 会话令牌钉扎：引擎创建前先钉住本页账号令牌（此后所有请求/写盘只认本页身份，
+  // 其他标签页切换账号不会让本页的旧账号内存漂移到新账号键/云端）
+  pinToken(user.token || null)
 
   // T12: 持久化失败/接近上限 → 用户可见提示（不再静默丢数据）
   setPersistWarningHook((msg, fatal) => ui.toast(msg, fatal ? 'err' : 'info'))
@@ -85,6 +90,23 @@ export function initApp(pinia) {
   // 页面销毁前把题目/考卷/历史大字段强写一次 IndexedDB（空闲回调可能被卸载丢弃）
   setStateSource(() => data.state)
   window.addEventListener('pagehide', flushBigFieldsNow)
+
+  // v3.37.1 跨标签页账号守卫：其他标签页登录/登出/切换账号 → 本页内存数据属主已过期，
+  // 冻结同步引擎并整页重建（本页从旧账号内存里消失，杜绝旧数据写入新账号键）
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('storage', (e) => {
+      if (!isAccountStorageCrossChange(e, getStateOwnerUid())) return
+      try {
+        setAccountSwitching(true)
+      } catch (err) { /* 忽略 */ }
+      try { window.location.reload() } catch (err) { /* 忽略 */ }
+    })
+    // 钉扎令牌失效（其他标签页重登/删除令牌）→ 同样整页重建对齐档案登录态
+    setAuthStaleHook(() => {
+      try { setAccountSwitching(true) } catch (err) { /* 忽略 */ }
+      try { window.location.reload() } catch (err) { /* 忽略 */ }
+    })
+  }
 
   applyDarkMode()
   applyFontSizes(data.state.settings)
