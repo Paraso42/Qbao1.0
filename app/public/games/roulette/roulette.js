@@ -1,5 +1,5 @@
 /* ============================================================
- * roulette.js — 俄罗斯轮盘（赌场转盘）自研前端 v4（Qbao · MIT）
+ * roulette.js — 俄罗斯轮盘（赌场转盘）自研前端 v5（Qbao · MIT）
  * 规则常量与 server/src/config/roulette.js 保持同步（裁决以服务端为准）。
  * 交互：点击颜色/奇偶立即放注（一步式），双选自动合成组合注 ×4，
  *       再点同按钮取消；绿色独立一键放注。
@@ -401,6 +401,18 @@
       }
     } catch (e) {}
   }
+  function sfxDrop() {
+    if (!AC || !soundOn) return;
+    try {
+      var o = AC.createOscillator(); var g = AC.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(900, AC.currentTime);
+      o.frequency.exponentialRampToValueAtTime(220, AC.currentTime + 0.5);
+      g.gain.setValueAtTime(0.05, AC.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + 0.55);
+      o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime + 0.6);
+    } catch (e) {}
+  }
   function sfxWin() {
     if (!AC || !soundOn) return;
     try {
@@ -439,6 +451,14 @@
     else if (hiddenAt && anim) { hiddenOffset += window.performance.now() - hiddenAt; hiddenAt = 0; }
   });
 
+  // ================================================================
+  // 物理仿真引擎（显式动力学积分，semi-implicit Euler，dt=1/240s）
+  // 模型：转盘 PD 伺服（临界阻尼跟踪目标停角）；小球轨道段受
+  //   滚动摩擦 + 空气阻力（线性）+ 拨片碰撞损失，速度持续衰减；
+  //   低于阈值后锥面滑落（径向加速 + 比例导向目标槽），
+  //   槽内临界阻尼振荡 2~3 次后精确静止。参数每局随机化。
+  // 无插值终点：球停 = 物理能量耗尽。
+  // ================================================================
   function startSpinAnimation(number, onDone) {
     var idx = indexOfNumber(number);
     if (reducedMotion) {
@@ -450,86 +470,130 @@
       onDone();
       return;
     }
-    var DUR = 8500;
-    var turns = 6 + Math.floor(Math.random() * 3);
-    var W0 = wheelAngle;
-    var Wf = finalWheelAngle(idx, turns);
-    var extraLaps = 9 + Math.floor(Math.random() * 3);
-    var relStart = Math.random() * Math.PI * 2;
-    var relEnd = relStart + extraLaps * Math.PI * 2;
-    var K = Math.ceil((Wf + relEnd + Math.PI / 2) / (Math.PI * 2));
-    var targetAbs = -Math.PI / 2 + Math.PI * 2 * K;
-    var absStart = W0 + relStart;
-    var lastFret = 0;
-    var t0 = performance.now();
+    var Wf = finalWheelAngle(idx, 6 + Math.floor(Math.random() * 3));
+    // —— 物理状态（每局随机化，手感各异但落点恒定）——
+    var P = {
+      phase: 'track',                      // track → drop → settle → done
+      // 转盘：PD 伺服（欠阻尼趋近 Wf）
+      wPos: wheelAngle,
+      wVel: -(16 + Math.random() * 7),
+      k: 0.5, cw: 1.32,
+      // 小球轨道段
+      theta: Math.random() * Math.PI * 2,
+      omega: 15 + Math.random() * 4,       // 绝对角速度 rad/s（约 2.6 rev/s 起）
+      alpha: 0.30 + Math.random() * 0.10,  // 滚动摩擦（恒减速）
+      cAir: 0.24 + Math.random() * 0.08,   // 空气阻力（线性 ≈ 正比速度）
+      dropOmega: 1.9 + Math.random() * 0.7,// 低于此速 → 锥面滑落
+      r: R * 0.80, rVel: 0, rAcc: 560,     // 锥面滑落：径向加速度（px/s²）
+      // 滑落相比例导向（把球"引"向目标槽，物理上≈分格器导向）
+      beta: 5.5 + Math.random() * 2.5, c2: 1.1,
+      // 槽内临界阻尼回弹
+      settleK: 30, settleC: 6.2,
+      dropTimer: 0,                          // 滑落最小时长门槛（防轨道→槽瞬移）
+      target: -Math.PI / 2,
+      tickAcc: 0,
+      TICK_STEP: SEG * 10,                 // 每 10 格一声拨片嗒嗒（尾部自动变稀）
+      dropPlayed: false
+    };
+    var last = performance.now();
+    var finished = false;
 
-    function frame(now) {
-      var t = Math.min(1, (now - hiddenOffset - t0) / DUR);
-      var e5 = 1 - Math.pow(1 - t, 5);
-      wheelAngle = W0 + (Wf - W0) * e5;
-      var speed = Math.max(0, 1 - t);
+    function wrapPi(a) {
+      while (a > Math.PI) a -= Math.PI * 2;
+      while (a < -Math.PI) a += Math.PI * 2;
+      return a;
+    }
+    function step(dt) {
+      // —— 转盘 PD 伺服 ——
+      P.wVel += (P.k * (Wf - P.wPos) - P.cw * P.wVel) * dt;
+      P.wPos += P.wVel * dt;
 
-      if (t < 0.68) {
-        var u = t / 0.68;
-        ball.angle = absStart + (targetAbs - absStart) * u;
-        ball.radius = R * 0.80 - u * (R * 0.80 - R * 0.70);
-        var rel = ball.angle - wheelAngle;
-        var fret = Math.floor(rel / SEG);
-        if (fret !== lastFret && t > 0.03) {
-          lastFret = fret;
-          sfxTick(0.55 + 0.45 * speed);
-          ball.radius += (Math.random() > 0.5 ? 1 : -1) * 1.6;
+      if (P.phase === 'track') {
+        // 滚动摩擦 + 空气阻力（真实减速曲线：线性摩擦 + 正比速度的阻力）
+        P.omega += (-P.alpha - P.cAir * P.omega) * dt;
+        P.theta += P.omega * dt;
+        // 拨片碰撞：每 TICK_STEP 弧度一次（loss 轻微，音效同频）
+        P.tickAcc += Math.abs(P.omega) * dt;
+        if (P.tickAcc > P.TICK_STEP) {
+          P.tickAcc -= P.TICK_STEP;
+          var rel = P.omega - P.wVel;
+          sfxTick(Math.min(1, 0.35 + Math.abs(rel) / 42));
         }
+        // 减速观感：轨道随速度降低轻微内沉
+        P.r = R * 0.80 - (1 - Math.min(1, P.omega / 15)) * (R * 0.80 - R * 0.72);
         ball.visible = true;
         pushTrail();
-        setSpinVolume(0.045 + 0.10 * speed);
-        setSpinSpeed(speed);
-      } else {
-        var tau = (t - 0.68) / 0.32;
-        var A = 0.07;
-        ball.angle = -Math.PI / 2 + A * Math.exp(-5 * tau) * Math.sin(12 * tau);
-        ball.radius = (R * 0.70) + (POCKET_R - R * 0.70) * (1 - Math.pow(1 - tau, 3));
+        setSpinVolume(Math.min(0.13, Math.abs(P.omega - P.wVel) / 300));
+        setSpinSpeed(Math.min(1, Math.abs(P.omega - P.wVel) / 36));
+        if (P.omega < P.dropOmega) { P.phase = 'drop'; clearTrail(); sfxDrop(); }
+      } else if (P.phase === 'drop') {
+        // 锥面滑落：径向加速下滑 + 角度比例导向目标槽（分格器效应）
+        P.dropTimer += dt;
+        P.rVel += P.rAcc * dt;
+        P.r += P.rVel * dt;
+        var diff = wrapPi(P.target - P.theta);
+        P.omega += (P.beta * diff - P.c2 * P.omega) * dt;
+        P.theta += P.omega * dt;
         ball.visible = true;
-        clearTrail();
-        setSpinVolume(0.05 * (1 - tau));
-        setSpinSpeed(Math.max(0, 1 - tau));
+        setSpinVolume(0.035); setSpinSpeed(0.04);
+        if (P.dropTimer > 0.3 && P.r >= POCKET_R && Math.abs(wrapPi(P.target - P.theta)) < 0.05) {
+          P.phase = 'settle';
+          sfxLand();
+        }
+      } else if (P.phase === 'settle') {
+        // 槽内临界阻尼回弹（2~3 次衰减后静止）
+        var d = wrapPi(P.target - P.theta);
+        P.omega += (P.settleK * d - P.settleC * P.omega) * dt;
+        P.theta += P.omega * dt;
+        ball.visible = true;
+        if (Math.abs(d) < 0.004 && Math.abs(P.omega) < 0.05) P.phase = 'done';
       }
+    }
 
+    function frame(now) {
+      var raw = Math.min(0.05, Math.max(0, (now - hiddenOffset - last) / 1000));
+      last = now;
+      var acc = raw;
+      while (acc > 1e-6) { var h = Math.min(acc, 1 / 240); step(h); acc -= h; }
+      wheelAngle = P.wPos;
+      ball.angle = P.theta;
+      ball.radius = P.r;
       drawWheel(wheelAngle);
       drawBall();
       led.textContent = '…';
-
-      if (t < 1) {
-        anim = requestAnimationFrame(frame);
-      } else {
-        wheelAngle = Wf;
-        ball.angle = -Math.PI / 2;
-        ball.radius = POCKET_R;
-        ball.visible = true;
-        clearTrail();
-        setSpinVolume(0);
-        sfxLand();
-        var ps = performance.now();
-        var pfin = false;
-        function pulse(now2) {
-          var pt = Math.min(1, (now2 - ps) / 1300);
-          var fl = (Math.sin(pt * 6) + 1) / 2;
-          drawWheel(wheelAngle, { highlight: number, hiPulse: pt < 1 ? fl : 1 });
-          drawBall();
-          if (pt < 1) { anim = requestAnimationFrame(pulse); }
-          else {
-            if (!pfin) {
-              pfin = true;
-              drawWheel(wheelAngle, { highlight: number, hiPulse: 1 });
-              drawBall();
-              led.textContent = String(number);
-              onDone();
-            }
-          }
-        }
-        anim = requestAnimationFrame(pulse);
+      if (P.phase === 'done') {
+        if (!finished) { finished = true; finish(); }
+        return;
       }
+      anim = requestAnimationFrame(frame);
     }
+
+    function finish() {
+      wheelAngle = Wf;
+      ball.angle = P.target;
+      ball.radius = POCKET_R;
+      ball.visible = true;
+      clearTrail();
+      setSpinVolume(0);
+      var ps = performance.now();
+      var pfin = false;
+      function pulse(now2) {
+        var pt = Math.min(1, (now2 - ps) / 1300);
+        var fl = (Math.sin(pt * 6) + 1) / 2;
+        drawWheel(wheelAngle, { highlight: number, hiPulse: pt < 1 ? fl : 1 });
+        drawBall();
+        if (pt < 1) { anim = requestAnimationFrame(pulse); }
+        else if (!pfin) {
+          pfin = true;
+          drawWheel(wheelAngle, { highlight: number, hiPulse: 1 });
+          drawBall();
+          led.textContent = String(number);
+          onDone();
+        }
+      }
+      anim = requestAnimationFrame(pulse);
+    }
+
     anim = requestAnimationFrame(frame);
   }
 
