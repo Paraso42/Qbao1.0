@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Qbao 游戏空间</title>
+<meta name="referrer" content="no-referrer">
+<style>
+  :root {
+    --brand: #4361ee;
+    --brand-light: rgba(67, 97, 238, 0.1);
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --text: #1c2333;
+    --text-2: #5b6478;
+    --muted: #8a93a6;
+    --line: #e3e8f2;
+    --ok: #2e9e5b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --brand: #7b94ff;
+      --brand-light: rgba(123, 148, 255, 0.14);
+      --bg: #141926;
+      --card: #1d2434;
+      --text: #e8ecf6;
+      --text-2: #aab3c8;
+      --muted: #6d778f;
+      --line: #2b3347;
+      --ok: #57c07f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 24px calc(14px + env(safe-area-inset-top));
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+    flex-wrap: wrap;
+  }
+  header .logo { font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  header .logo .pad { width: 30px; height: 30px; border-radius: 9px; background: var(--brand); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; }
+  #userbox { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); }
+  #userbox .guest { color: var(--muted); }
+  #userbox .pill { background: var(--brand-light); color: var(--brand); padding: 4px 10px; border-radius: 999px; font-weight: 600; }
+  #backlink { color: var(--brand); text-decoration: none; font-size: 13px; font-weight: 600; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; }
+  #backlink:hover { background: var(--brand-light); }
+  main {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 28px 24px calc(30px + env(safe-area-inset-bottom));
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-decoration: none;
+    color: inherit;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(15, 25, 60, .12); }
+  .card .icon { font-size: 34px; line-height: 1; }
+  .card h2 { margin: 0; font-size: 16px; font-weight: 700; }
+  .card p { margin: 0; font-size: 12.5px; color: var(--text-2); line-height: 1.55; flex: 1; }
+  .card .meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; }
+  .card .tag { padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+  .card .tag.learn { background: var(--brand-light); color: var(--brand); }
+  .card .tag.fun { background: rgba(238, 179, 67, .16); color: #c98a17; }
+  .card .tag.self { background: rgba(46, 158, 91, .14); color: var(--ok); }
+  .card .score { color: var(--muted); }
+  .card .go { margin-top: 4px; text-align: center; background: var(--brand); color: #fff; border-radius: 10px; padding: 8px 0; font-size: 13px; font-weight: 600; }
+  .guest-note {
+    max-width: 1080px; margin: 8px auto 0; padding: 0 24px; font-size: 12.5px; color: var(--muted);
+  }
+  footer {
+    max-width: 1080px; margin: 0 auto; padding: 8px 24px calc(20px + env(safe-area-inset-bottom));
+    font-size: 11.5px; color: var(--muted); line-height: 1.7;
+  }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><span class="pad">🎮</span> Qbao 游戏空间</div>
+  <div id="userbox"><span id="who" class="guest">加载中…</span><a id="backlink" href="../index.html">返回 Qbao</a></div>
+</header>
+<p class="guest-note" id="guestNote" style="display:none">当前为游客模式：可试玩，成绩不保存。登录 Qbao 后成绩将按账号保存。</p>
+<main>
+  <a class="card" href="./2048/index.html" data-id="2048">
+    <span class="icon">🔢</span>
+    <h2>2048</h2>
+    <p>经典数字合成：滑动合并方块，冲向 2048 与更高分。键盘方向键或滑屏操作。</p>
+    <span class="meta"><span class="tag fun">休闲</span><span class="score"></span></span>
+    <span class="go">开始游戏</span>
+  </a>
+  <a class="card" href="./froggy/index.html" data-id="froggy">
+    <span class="icon">🐸</span>
+    <h2>Flexbox Froggy</h2>
+    <p>CSS Flexbox 闯关教学：用 flex 属性帮助小青蛙跳到荷叶上，24 关由浅入深。</p>
+    <span class="meta"><span class="tag learn">教学</span><span class="score"></span></span>
+    <span class="go">开始闯关</span>
+  </a>
+  <a class="card" href="./gridgarden/index.html" data-id="gridgarden">
+    <span class="icon">🥕</span>
+    <h2>Grid Garden</h2>
+    <p>CSS Grid 闯关教学：使用 grid 属性给胡萝卜浇水除草，28 关实战演练。</p>
+    <span class="meta"><span class="tag learn">教学</span><span class="score"></span></span>
+    <span class="go">开始闯关</span>
+  </a>
+  <a class="card" href="./tetris/index.html" data-id="tetris">
+    <span class="icon">🧩</span>
+    <h2>俄罗斯方块</h2>
+    <p>经典消除下落方块。方向键移动旋转，空格开始新一局，看看你能消除多少行。</p>
+    <span class="meta"><span class="tag fun">休闲</span><span class="score"></span></span>
+    <span class="go">开始游戏</span>
+  </a>
+</main>
+<footer>
+  本游戏空间为 Qbao 附属休闲站点，游戏均为开源项目原版托管（MIT 许可），来源与许可对照见 <a href="./README.md">games/README.md</a>。
+  成绩数据按 Qbao 账号隔离保存，仅用于个人记录。
+</footer>
+<script>window.__QBAO_GAME_ID__ = 'portal';</script>
+<script src="./common/qbao-hook.js"></script>
+<script>
+(function () {
+  var NAME = { '2048': '最佳分数', froggy: '通关进度', gridgarden: '通关进度', tetris: '最佳分数' };
+  function fmt(id, g) {
+    if (!g) return '';
+    if (id === '2048' || id === 'tetris') return (g.best || 0) + ' 分 · ' + (g.plays || 0) + ' 次';
+    return (g.level || 0) + '/' + (id === 'froggy' ? 24 : 28) + ' 关 · ' + (g.plays || 0) + ' 次';
+  }
+  // 桌面形态：门户为独立子窗口，「返回 Qbao」= 关闭本窗口（主窗口仍在）
+  if (window.__qbaoDesktop) {
+    var bl = document.getElementById('backlink');
+    bl.addEventListener('click', function (e) { e.preventDefault(); window.close(); });
+  }
+  window.__qbaoHook.getSession(function (s) {
+    var who = document.getElementById('who');
+    if (!s || !s.token) {
+      who.textContent = '未登录（游客）';
+      document.getElementById('guestNote').style.display = '';
+      return;
+    }
+    // 拿用户昵称：现有 /api/v1/users/me 端点（与 SPA 同源接口）
+    var base = window.__qbaoHook.apiBase();
+    fetch(base + '/api/v1/users/me', { headers: { 'Authorization': 'Bearer ' + s.token } })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (u) {
+        if (u && (u.displayName || u.username)) who.textContent = '👤 ' + (u.displayName || u.username);
+        else who.textContent = '已登录';
+      })
+      .catch(function () { who.textContent = '已登录'; });
+    fetch(base + '/api/v1/games', { headers: { 'Authorization': 'Bearer ' + s.token } })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (j) {
+        var data = j && j.data ? j.data : {};
+        document.querySelectorAll('.card').forEach(function (card) {
+          var id = card.getAttribute('data-id');
+          var box = card.querySelector('.score');
+          if (data[id]) box.textContent = fmt(id, data[id]);
+        });
+      })
+      .catch(function () {});
+  });
+})();
+</script>
+</body>
+</html>

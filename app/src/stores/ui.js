@@ -20,6 +20,17 @@ export const useUiStore = defineStore('ui', {
     toggleSidebar() { this.sidebarOpen = !this.sidebarOpen },
     closeSidebar() { this.sidebarOpen = false },
     showScreen(name) { this.activeScreen = name; this.closeSidebar() },
+    // v3.38：游戏门户（附属静态站）。桌面端子窗口（IPC）；网页端新标签同源打开。
+    // 打开方式保证当前标签页存活 → AI 出题轮询不中断（服务端 worker 推进任务）。
+    openGamesPortal() {
+      const b = (typeof window !== 'undefined' && window.__qbaoDesktop && typeof window.__qbaoDesktop.openGames === 'function')
+        ? window.__qbaoDesktop.openGames
+        : null
+      try {
+        if (b) b()
+        else if (typeof window !== 'undefined') window.open('./games/index.html', '_blank', 'noopener')
+      } catch (e) { /* 弹窗被拦截时静默，入口按钮仍在 */ }
+    },
     openSettings(tab) { this.settingsOpen = true; this.settingsTab = tab || 'personalize' },
     closeSettings() { this.settingsOpen = false },
     setSettingsTab(tab) { this.settingsTab = tab },

@@ -116,6 +116,49 @@ ipcMain.handle('qbao:open-external', (_e, url) => {
   if (typeof url === 'string' && /^https?:\/\//.test(url)) shell.openExternal(url);
   return true;
 });
+
+// —— v3.38 游戏空间门户（附属静态站）——
+// 子窗口加载本地 games/index.html（dev: ../app/dist/games/；打包: app/games/），
+// webPreferences 与主窗口一致（contextIsolation + sandbox + preload），
+// 门户经既有 qbao:secret-load 通道读取登录态（不新增密钥面）。
+let gamesWindow = null;
+ipcMain.handle('qbao:open-games', () => {
+  if (gamesWindow && !gamesWindow.isDestroyed()) {
+    gamesWindow.show();
+    gamesWindow.focus();
+    return { ok: true };
+  }
+  const runtime = loadRuntimeConfig();
+  const runtimeArg = '--qbao-runtime=' + encodeURIComponent(JSON.stringify({ apiBase: runtime.apiBase, serverLabel: runtime.serverLabel, updateChannel: runtime.updateChannel, isDesktop: true }));
+  const portalHtml = app.isPackaged
+    ? path.join(__dirname, 'app', 'games', 'index.html')
+    : path.join(__dirname, '..', 'app', 'dist', 'games', 'index.html');
+  gamesWindow = new BrowserWindow({
+    width: 1100,
+    height: 780,
+    minWidth: 480,
+    minHeight: 400,
+    title: 'Qbao 游戏空间',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      additionalArguments: [runtimeArg],
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+  gamesWindow.loadFile(portalHtml).catch(() => {});
+  // 安全策略与主窗口一致：外链交系统浏览器；导航仅限本地页面；关窗即置空引用
+  gamesWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  gamesWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('file://')) event.preventDefault();
+  });
+  gamesWindow.on('closed', () => { gamesWindow = null; });
+  return { ok: true };
+});
 // 应用信息（版本/服务器/自启状态），供「设置 → 桌面端」页展示
 ipcMain.handle('qbao:get-app-info', () => {
   const runtime = loadRuntimeConfig();

@@ -29,7 +29,7 @@ server/  Node.js + Express API（端口 3000）
 
 ## 2. 前端（app/）
 
-- **技术形态**：Vue 3 + Vite + Pinia 组件化工程（v3.27 起重构，此前为手写 DOM 单文件）。构建采用 `vite-plugin-singlefile`，产物 `app/dist/index.html` 内嵌全部 JS/CSS（singlefile，约 550KB）；同一份产物既由 nginx 托管为网页，也被 Electron 以 file:// 内嵌加载（桌面端免部署）。
+- **技术形态**：Vue 3 + Vite + Pinia 组件化工程（v3.27 起重构，此前为手写 DOM 单文件）。构建采用 `vite-plugin-singlefile`，产物 `app/dist/index.html` 内嵌全部 JS/CSS（singlefile，约 550KB）；同一份产物既由 nginx 托管为网页，也被 Electron 以 file:// 内嵌加载（桌面端免部署）。附属静态站 app/public/games/（v3.38 游戏门户，独立于 SPA）随构建拷入 app/dist/games/，与主站同源共享登录态（详见 docs/GAMES.md）。
 - **状态与持久化**：Pinia stores 统一状态入口；`services/persistence.js`（localStorage 骨架 + 大字段分流 IndexedDB + 配额自愈）、`services/stateDb.js`（IDB 行键按账号分区）、`services/sync.js`（带 rev 乐观锁的同步引擎：空推跳过、409 实体级并集合并重推、keepalive 补推）。
 - **账号隔离（v3.36–v3.37）**：登录门禁（弃匿名态）+ 属主钉扎（写盘属主 / 会话令牌 / 跨标签 storage 守卫），多标签页零串账，E2E 验证。
 - **渲染**：组件化渲染（scoped CSS + 设计令牌 `styles/tokens.css`）；图表为零依赖 SVG 组件（DonutChart / TrendChart）。

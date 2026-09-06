@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld('__qbaoDesktop', Object.freeze({
   secretLoad: (name) => ipcRenderer.invoke('qbao:secret-load', name),
   secretRemove: (name) => ipcRenderer.invoke('qbao:secret-remove', name),
   openExternal: (url) => ipcRenderer.invoke('qbao:open-external', url),
+  // v3.38：打开游戏门户子窗口（本地附属静态站）
+  openGames: () => ipcRenderer.invoke('qbao:open-games'),
   onUpdateStatus: (cb) => {
     ipcRenderer.on('qbao:update-status', (_e, s) => { try { cb(s); } catch (err) {} });
   }

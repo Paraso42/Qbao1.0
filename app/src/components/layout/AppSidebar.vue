@@ -58,7 +58,16 @@
           <span v-else>{{ user.shortName }}</span>
         </span>
         <span class="user-name">{{ user.user.displayName || user.user.username }}</span>
-        <span class="user-sync" :class="{ online: sync.online, syncing: sync.syncing }"></span>
+        <!-- v3.38：同步状态顶栏已有（tb-pill），此处右侧改为游戏门户入口；AI 出题等待时高亮引导 -->
+        <button
+          class="user-game"
+          :class="{ hint: gameHint }"
+          :title="gameHint ? 'AI 生成中，去游戏空间放松一下？' : '游戏空间'"
+          @click.stop="ui.openGamesPortal()"
+        >
+          <Icon name="gamepad" :size="15" />
+          <span v-if="gameHint" class="game-badge" aria-hidden="true"></span>
+        </button>
       </div>
     </div>
   </aside>
@@ -71,7 +80,6 @@ import { useUiStore } from '../../stores/ui'
 import { useDataStore } from '../../stores/data'
 import { useSubjectStore } from '../../stores/subjects'
 import { useUserStore } from '../../stores/user'
-import { useSyncStore } from '../../stores/sync'
 import { useQuizStore } from '../../stores/quiz'
 import { useAiStore } from '../../stores/ai'
 import Icon from '../ui/Icon.vue'
@@ -84,7 +92,6 @@ const ui = useUiStore()
 const data = useDataStore()
 const subjects = useSubjectStore()
 const user = useUserStore()
-const sync = useSyncStore()
 const quiz = useQuizStore()
 const ai = useAiStore()
 
@@ -95,6 +102,9 @@ const aiRunning = computed(() => {
   const queue = data.state.aiTaskQueue || []
   return queue.filter((t) => t.status === 'pending' || t.status === 'running').length
 })
+
+// v3.38：等待场景 → 游戏入口高亮引导（纯样式、不抢焦点、无弹窗）
+const gameHint = computed(() => aiRunning.value > 0)
 
 function chapterTotal(cid) {
   // 题量口径与题库一致：轮次题数之和，旧章节回退题库数组
@@ -341,14 +351,32 @@ function toggleAi(v) {
 .user-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .user-avatar.ghost { background: var(--surface-hover); color: var(--text-muted); }
 .user-name { font-size: var(--fs-sm); color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.user-sync {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--status-muted);
+.user-game {
+  position: relative;
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
   flex-shrink: 0;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
-.user-sync.online { background: var(--status-ok); }
-.user-sync.syncing { background: var(--status-run); animation: pulse 1.2s infinite; }
+.user-game:hover { background: var(--surface-hover); color: var(--color-primary); }
+.user-game.hint { color: var(--color-primary); animation: game-pulse 1.1s ease-in-out infinite; }
+.user-game .game-badge {
+  position: absolute;
+  top: 3px; right: 3px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  border: 1.5px solid var(--sidebar-bg);
+}
+@keyframes game-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(67, 97, 238, 0); }
+  50% { box-shadow: 0 0 0 5px rgba(67, 97, 238, 0.22); }
+}
 @keyframes pulse { 50% { opacity: 0.4; } }
 
 .sidebar-overlay { display: none; }

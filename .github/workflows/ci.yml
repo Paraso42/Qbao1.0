@@ -77,6 +77,20 @@ jobs:
             if (/javascript:/i.test(html)) { console.error('产物含 javascript: 伪协议'); process.exit(1); }
             console.log('dist smoke OK, size=' + (html.length / 1024).toFixed(0) + 'KB');
           "
+      - name: 游戏门户产物冒烟（清单 × dist 一一对应）
+        working-directory: app
+        run: |
+          node --input-type=module -e "
+            import fs from 'node:fs';
+            import { GAMES } from './src/services/gamesManifest.js';
+            const missing = [];
+            if (!fs.existsSync('dist/games/index.html')) missing.push('dist/games/index.html');
+            for (const g of GAMES) {
+              if (!fs.existsSync('dist/' + g.src)) missing.push('dist/' + g.src);
+            }
+            if (missing.length) { console.error('游戏产物缺失: ' + missing.join(', ')); process.exit(1); }
+            console.log('games smoke OK: ' + GAMES.length + ' games');
+          "
       - name: 前端依赖漏洞审计（高危阻断）
         working-directory: app
         run: npm audit --audit-level=high
