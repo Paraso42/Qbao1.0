@@ -40,22 +40,21 @@
       </div>
     </div>
 
-    <div class="sec-title">② 选颜色 · 选奇偶（可双选）</div>
+    <div class="sec-title">② 选颜色 · 选奇偶（点选即下注）</div>
     <div class="pick-row" id="colorRow">
       <button class="pick red" data-pick="color" data-value="red">红</button>
       <button class="pick black" data-pick="color" data-value="black">黑</button>
-      <span class="pick-hint">红色/黑色 ×2</span>
+      <span class="pick-hint">点击即下注 · 再点取消</span>
     </div>
     <div class="pick-row" id="parityRow">
       <button class="pick odd" data-pick="parity" data-value="odd">奇</button>
       <button class="pick even" data-pick="parity" data-value="even">偶</button>
-      <span class="pick-hint">奇数/偶数 ×2 · 双选组合 ×4</span>
+      <span class="pick-hint">奇偶 ×2 · 与颜色双选自动合成组合 ×4</span>
     </div>
     <div class="pick-row">
       <button class="pick green" id="greenBtn">绿 <small>(0)</small></button>
-      <span class="pick-hint">绿色 ×35，与颜色/奇偶互不影响</span>
+      <span class="pick-hint">绿色 ×35 · 与颜色/奇偶互不影响</span>
     </div>
-    <button id="addSpot" class="add-btn" disabled>+ 加入注单（1 注 = 当前双选组合）</button>
 
     <div class="sec-title">③ 本轮注单</div>
     <ul id="spots" class="spots"><li class="empty">还没有注位</li></ul>

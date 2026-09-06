@@ -1,13 +1,12 @@
 /* ============================================================
- * roulette.js — 俄罗斯轮盘（赌场转盘）自研前端 v3（Qbao · MIT）
+ * roulette.js — 俄罗斯轮盘（赌场转盘）自研前端 v4（Qbao · MIT）
  * 规则常量与 server/src/config/roulette.js 保持同步（裁决以服务端为准）。
- * 动画（视觉物理，两段式）：
- *   阶段A：转盘 6~8 圈 easeOutQuint 猛起缓停（8.5s），小球绝对角匀速滚动、
- *           相对轮盘先快后慢，越过拨片嗒嗒声 + 径向微弹，高速时带拖影；
- *   阶段B：球在指针正下方槽内阻尼回弹 2~3 次后精确归位（0.62R 槽位）；
- *   结束帧严格对齐 12 点指针 = 中奖格中心，无任何回跳/漂移；
- *   中奖格白描边 + 数字放大闪亮 + 指针 pop + LED 显示开奖号。
- * 声音：WebAudio 实时合成（风声/拨片嗒嗒/落定低鸣/中奖和弦），零资源文件。
+ * 交互：点击颜色/奇偶立即放注（一步式），双选自动合成组合注 ×4，
+ *       再点同按钮取消；绿色独立一键放注。
+ * 动画：两段式视觉物理（转盘 6~8 圈 easeOutQuint 猛起缓停 · 小球匀速滚动
+ *       + 拨片嗒嗒 + 拖影 + 槽内阻尼回弹），结束帧零回跳严格对齐，
+ *       中奖格白描边辉光 + 数字放大闪亮 + LED 开奖号。
+ * 声音：WebAudio 实时合成（风声/嗒嗒/落定低鸣/中奖和弦），零资源文件。
  * ============================================================ */
 (function () {
   'use strict';
@@ -15,7 +14,7 @@
   // —— 常量（与 server/src/config/roulette.js 同步）——
   var RED_NUMBERS = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
   var WIN_MULT = { color: 2, parity: 2, combo: 4, green: 35 };
-  var MIN_BET = 1, MAX_BET = 100000, MAX_SPOTS = 3, DAILY_STAKE_CAP = 500;
+  var MIN_BET = 1, MAX_BET = 100000, MAX_SPOTS = 2;
   var ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
   function colorOf(n) { return n === 0 ? 'green' : (RED_NUMBERS.indexOf(n) >= 0 ? 'red' : 'black'); }
   function cnName(n) { var t = colorOf(n); return t === 'red' ? '红' : t === 'black' ? '黑' : '绿'; }
@@ -34,7 +33,6 @@
   var overlay = document.getElementById('resultOverlay');
   var toastEl = document.getElementById('toast');
   var led = document.getElementById('led');
-  var addSpotBtn = document.getElementById('addSpot');
 
   // —— 状态 ——
   var session = null;
@@ -43,7 +41,9 @@
   var spinning = false;          // API+动画进行中（不可取消）
   var pendingRoundId = null;
   var guest = false;
-  var picks = { color: null, parity: null };
+  // 一步式活动注：颜色/奇偶（可双选合成组合注）+ 独立绿色注
+  var active = { color: null, parity: null, amount: 10 };
+  var greenOn = false, greenAmount = 10;
 
   function uuid4() {
     if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
@@ -85,7 +85,7 @@
       .catch(function () {});
   });
 
-  // —— 双选 UI ——
+  // —— 一步式放注 ——
   function spotLabel(b) {
     if (b.type === 'color') return b.value === 'red' ? '红色' : '黑色';
     if (b.type === 'parity') return b.value === 'odd' ? '奇数' : '偶数';
@@ -98,72 +98,77 @@
     if (b.type === 'parity') return cnColor(b.value === 'odd' ? 3 : 4);
     return '#2e9e5b';
   }
-  function setPick(group, value) {
+  function pickAmount() {
+    var v = parseInt(amountInput.value, 10);
+    if (!v || v < MIN_BET) return null;
+    if (v > MAX_BET) return MAX_BET;
+    return v;
+  }
+  function buildSpots() {
+    spots = [];
+    var amt = active.amount;
+    if (active.color && active.parity) spots.push({ type: 'combo', value: active.color + '+' + active.parity, amount: amt });
+    else if (active.color) spots.push({ type: 'color', value: active.color, amount: amt });
+    else if (active.parity) spots.push({ type: 'parity', value: active.parity, amount: amt });
+    if (greenOn) spots.push({ type: 'green', value: 'green', amount: greenAmount });
+  }
+  function totalStake() {
+    return spots.reduce(function (s, b) { return s + b.amount; }, 0);
+  }
+  function snapshot() {
+    return { color: active.color, parity: active.parity, amount: active.amount, greenOn: greenOn, greenAmount: greenAmount };
+  }
+  function restore(snap) {
+    active.color = snap.color; active.parity = snap.parity; active.amount = snap.amount;
+    greenOn = snap.greenOn; greenAmount = snap.greenAmount;
+  }
+  function togglePick(group, value) {
     if (spinning) return;
-    picks[group] = (picks[group] === value) ? null : value;
-    renderPicks();
-  }
-  function comboLabel() {
-    var c = picks.color, p = picks.parity;
-    if (!c && !p) return null;
-    return (c ? (c === 'red' ? '红' : '黑') : '') + (c && p ? '+' : '') + (p ? (p === 'odd' ? '奇' : '偶') : '') + ' ×' + (c && p ? 4 : 2);
-  }
-  function renderPicks() {
-    document.querySelectorAll('.pick[data-pick]').forEach(function (b) {
-      var g = b.getAttribute('data-pick');
-      var v = b.getAttribute('data-value');
-      b.classList.remove('on-red', 'on-black', 'on-odd', 'on-even');
-      if (picks[g] === v) b.classList.add('on-' + v);
-    });
-    var label = comboLabel();
-    addSpotBtn.disabled = !label || spinning;
-    addSpotBtn.textContent = label ? '+ 加入注单（' + label + '）' : '+ 加入注单（先选颜色 / 奇偶）';
-    enableSpinCheck();
+    var amt = pickAmount();
+    if (!amt) { toast('请输入有效金额（1~' + MAX_BET + '）', true); return; }
+    var prev = snapshot();
+    active.amount = amt;
+    if (group === 'color') active.color = (active.color === value) ? null : value;
+    else active.parity = (active.parity === value) ? null : value;
+    if (!rebuildFromActive()) restore(prev);
   }
   document.querySelectorAll('.pick[data-pick]').forEach(function (b) {
-    b.addEventListener('click', function () { setPick(b.getAttribute('data-pick'), b.getAttribute('data-value')); });
+    b.addEventListener('click', function () { togglePick(b.getAttribute('data-pick'), b.getAttribute('data-value')); });
   });
   document.getElementById('greenBtn').addEventListener('click', function () {
     if (spinning) return;
-    var amount = currentAmount();
-    if (!amount) { toast('请输入有效金额', true); return; }
-    if (pushSpot({ type: 'green', value: 'green', amount: amount })) { picks.color = null; picks.parity = null; renderPicks(); }
+    var amt = pickAmount();
+    if (!amt) { toast('请输入有效金额（1~' + MAX_BET + '）', true); return; }
+    var prev = snapshot();
+    greenAmount = amt;
+    greenOn = !greenOn;
+    if (!rebuildFromActive()) restore(prev);
   });
-
-  function currentAmount() {
-    var v = parseInt(amountInput.value, 10);
-    return v && v >= MIN_BET ? v : null;
-  }
-  function pushSpot(b) {
-    if (!b.amount || b.amount < MIN_BET) { toast('金额至少 ' + MIN_BET + ' 分', true); return false; }
-    if (b.amount > MAX_BET) { toast('单注最多 ' + MAX_BET + ' 分', true); return false; }
-    var dup = spots.some(function (x) { return x.type === b.type && x.value === b.value; });
-    if (dup) { toast('该注位已在注单中', true); return false; }
-    if (spots.length >= MAX_SPOTS) { toast('一局最多 ' + MAX_SPOTS + ' 个注位', true); return false; }
-    if (!guest && session) {
-      var total = spots.reduce(function (s, x) { return s + x.amount; }, 0) + b.amount;
-      if (total > balance) { toast('总注超过当前余额', true); return false; }
+  function rebuildFromActive() {
+    buildSpots();
+    if (!guest && session && totalStake() > balance) {
+      toast('总注超过当前余额，已撤销本次放注', true);
+      return false;   // 超限：调用方恢复快照
     }
-    spots.push(b);
+    renderButtons();
     renderSpots();
     return true;
   }
-  addSpotBtn.addEventListener('click', function () {
-    if (spinning) return;
-    var amount = currentAmount();
-    if (!amount) { toast('请输入有效金额', true); return; }
-    var c = picks.color, p = picks.parity;
-    if (!c && !p) { toast('请先选择颜色或奇偶', true); return; }
-    var b = c && p ? { type: 'combo', value: c + '+' + p, amount: amount }
-      : c ? { type: 'color', value: c, amount: amount } : { type: 'parity', value: p, amount: amount };
-    if (pushSpot(b)) { picks.color = null; picks.parity = null; renderPicks(); }
-  });
-
+  function renderButtons() {
+    document.querySelectorAll('.pick[data-pick]').forEach(function (b) {
+      var g = b.getAttribute('data-pick');
+      var v = b.getAttribute('data-value');
+      b.classList.remove('on-red', 'on-black', 'on-odd', 'on-even', 'on-green');
+      if (active[g] === v) b.classList.add('on-' + v);
+    });
+    var gb = document.getElementById('greenBtn');
+    gb.classList.toggle('on-green', greenOn);
+    gb.innerHTML = greenOn ? '绿(0) ✓ ×35' : '绿 <small>(0)</small> ×35';
+  }
   function renderSpots() {
-    var total = spots.reduce(function (s, b) { return s + b.amount; }, 0);
-    totalEl.textContent = total;
+    totalEl.textContent = totalStake();
     if (spots.length === 0) {
-      spotsUl.innerHTML = '<li class="empty">还没有注位，先在上方选择</li>';
+      spotsUl.innerHTML = '<li class="empty">还没有注位 · 点击左侧颜色/奇偶即下注</li>';
     } else {
       spotsUl.innerHTML = '';
       spots.forEach(function (b, i) {
@@ -173,7 +178,14 @@
           (b.type === 'combo' ? ' ×4' : b.type === 'green' ? ' ×35' : ' ×2');
         var amt = document.createElement('span'); amt.className = 'amt'; amt.textContent = b.amount + ' 分';
         var del = document.createElement('button'); del.textContent = '✕';
-        del.addEventListener('click', function () { if (!spinning) { spots.splice(i, 1); renderSpots(); } });
+        del.addEventListener('click', function () {
+          if (spinning) return;
+          if (b.type === 'green') { greenOn = false; }
+          else if (b.type === 'combo') { active.color = null; active.parity = null; }
+          else if (b.type === 'color') { active.color = null; }
+          else { active.parity = null; }
+          buildSpots(); renderButtons(); renderSpots();
+        });
         li.appendChild(tag); li.appendChild(amt); li.appendChild(del);
         spotsUl.appendChild(li);
       });
@@ -181,8 +193,7 @@
     enableSpinCheck();
   }
   function enableSpinCheck() {
-    var total = spots.reduce(function (s, b) { return s + b.amount; }, 0);
-    SpinBtn.disabled = spinning || spots.length === 0 || (guest ? false : (session && total > balance));
+    SpinBtn.disabled = spinning || spots.length === 0 || (guest ? false : (session && totalStake() > balance));
   }
   document.querySelectorAll('.chips button').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -190,8 +201,8 @@
       var v = b.getAttribute('data-v');
       if (v === 'max') {
         var max = guest ? 500 : balance;
-        var total = spots.reduce(function (s, x) { return s + x.amount; }, 0);
-        var avail = Math.min(max - total, MAX_BET);
+        var current = totalStake();
+        var avail = Math.min(max - current, MAX_BET);
         amountInput.value = avail > 0 ? avail : MIN_BET;
       } else amountInput.value = v;
     });
@@ -215,20 +226,18 @@
   // ================================================================
   // 绘制（立体感：金属外圈+拨片 / 槽深 / 格面凸起 / 轴心 / 高光球）
   // ================================================================
-  // DPR 修复：HiDPI 下 720 逻辑坐标按设备像素渲染，CSS 缩放不再发糊
   var DPR = Math.min(2, window.devicePixelRatio || 1);
   cv.width = 720 * DPR; cv.height = 720 * DPR;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 
   var R = 340, CX = 360, CY = 360;
   var SEG = (Math.PI * 2) / 37;
-  var POCKET_R = R * 0.62;      // 槽位半径（评审：槽中线，避免落在内盘边缘）
+  var POCKET_R = R * 0.62;
   var wheelAngle = 0;
   var ball = { angle: 0, radius: 0, visible: false };
-  var trail = [];               // 拖影（记录最近球位）
+  var trail = [];
 
   function indexOfNumber(n) { return ORDER.indexOf(n); }
-  // θ_end = -(idx+0.5)·SEG - 2πN：idx 格中心精确对 12 点指针
   function finalWheelAngle(idx, turns) { return -(idx + 0.5) * SEG - Math.PI * 2 * turns; }
 
   function drawWheel(angle, opts) {
@@ -237,17 +246,14 @@
     var hiIdx = (opts.highlight !== undefined) ? indexOfNumber(opts.highlight) : -1;
     var hiFlash = opts.hiPulse !== undefined ? opts.hiPulse : 0;
 
-    // —— 金属外圈（对角渐变 + 内外描边 + 拨片线）——
     var ring = ctx.createLinearGradient(0, 0, 720, 720);
     ring.addColorStop(0, '#e8e3d8');
     ring.addColorStop(0.5, '#8d8678');
     ring.addColorStop(1, '#c9c2b4');
     ctx.beginPath(); ctx.arc(CX, CY, R + 4, 0, Math.PI * 2); ctx.fillStyle = ring; ctx.fill();
     ctx.beginPath(); ctx.arc(CX, CY, R + 4, 0, Math.PI * 2); ctx.strokeStyle = '#201b12'; ctx.lineWidth = 2; ctx.stroke();
-    // 内沿暗弧（外圈内阴影感）
     ctx.beginPath(); ctx.arc(CX, CY, R + 1, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 3; ctx.stroke();
-    // 37 根拨片线（外圈 R+6 ~ R+22）
     ctx.save();
     ctx.strokeStyle = 'rgba(40,30,10,.55)';
     ctx.lineWidth = 2;
@@ -260,7 +266,6 @@
     }
     ctx.restore();
 
-    // —— 槽底深环 + 37 格（每格：深色槽壁 → 渐变格面 → 数字）——
     ctx.beginPath(); ctx.arc(CX, CY, R - 28, 0, Math.PI * 2); ctx.fillStyle = '#171208'; ctx.fill();
     for (var k = 0; k < 37; k++) {
       var n = ORDER[k];
@@ -268,11 +273,9 @@
       var a1 = a0 + SEG;
       var col = colorOf(n);
       var isHi = (k === hiIdx);
-      // 槽壁（左侧略深，表纵深）
       ctx.beginPath(); ctx.moveTo(CX, CY); ctx.arc(CX, CY, R - 28, a0, a1); ctx.closePath();
       ctx.fillStyle = col === 'red' ? '#6d1010' : col === 'black' ? '#05070b' : '#0b4a29';
       ctx.fill();
-      // 格面（径向渐变，中心高光表凸起；边缘压暗表槽深）
       var midA = a0 + SEG / 2;
       var gx = CX + Math.cos(midA) * (R - 160);
       var gy = CY + Math.sin(midA) * (R - 160);
@@ -282,12 +285,10 @@
       else { grd.addColorStop(0, '#35b874'); grd.addColorStop(1, '#0d5533'); }
       ctx.beginPath(); ctx.moveTo(CX, CY); ctx.arc(CX, CY, R - 28, a0 + 0.014, a1 - 0.014); ctx.closePath();
       ctx.fillStyle = grd; ctx.fill();
-      // 格间亮边（表拨片）
       ctx.beginPath();
       ctx.moveTo(CX + Math.cos(a0) * (R - 166), CY + Math.sin(a0) * (R - 166));
       ctx.lineTo(CX + Math.cos(a0) * (R - 30), CY + Math.sin(a0) * (R - 30));
       ctx.strokeStyle = 'rgba(255,255,255,.16)'; ctx.lineWidth = 1.2; ctx.stroke();
-      // 数字（中奖格放大闪亮）
       var scale = isHi && hiFlash > 0 ? 1 + 0.28 * hiFlash : 1;
       var tx = CX + Math.cos(midA) * (R - 168);
       var ty = CY + Math.sin(midA) * (R - 168);
@@ -301,7 +302,6 @@
       ctx.fillStyle = isHi && hiFlash > 0 ? '#fff8dc' : '#ffffff';
       ctx.fillText(String(n), 0, 0);
       ctx.restore();
-      // 中奖格白描边 + 辉光
       if (isHi) {
         ctx.save();
         ctx.shadowColor = 'rgba(255,255,235,.95)';
@@ -312,13 +312,11 @@
         ctx.restore();
       }
     }
-    // —— 内圈 ——
     ctx.beginPath(); ctx.arc(CX, CY, R - 176, 0, Math.PI * 2);
     var inner = ctx.createRadialGradient(CX, CY - 24, 8, CX, CY, R - 176);
     inner.addColorStop(0, '#2c313c'); inner.addColorStop(1, '#0a0c10');
     ctx.fillStyle = inner; ctx.fill();
     ctx.strokeStyle = 'rgba(216,180,90,.5)'; ctx.lineWidth = 2.5; ctx.stroke();
-    // —— 轴心（3 层金属 + specular 高光）——
     var hub = ctx.createRadialGradient(CX - 16, CY - 20, 4, CX, CY, 118);
     hub.addColorStop(0, '#f6f1e2'); hub.addColorStop(0.35, '#b3a277'); hub.addColorStop(1, '#4c4432');
     ctx.beginPath(); ctx.arc(CX, CY, 118, 0, Math.PI * 2); ctx.fillStyle = hub; ctx.fill();
@@ -329,12 +327,10 @@
     ctx.beginPath(); ctx.arc(CX, CY, 12, 0, Math.PI * 2); ctx.fillStyle = '#d8b45a'; ctx.fill();
   }
 
-  // 小球（高光 + 拖影）
   function drawBall() {
     if (!ball.visible) return;
     var bx = CX + Math.cos(ball.angle) * ball.radius;
     var by = CY + Math.sin(ball.angle) * ball.radius;
-    // 拖影（高速时 2 阶 α 拖尾）
     for (var i = 0; i < trail.length; i++) {
       var a = trail[trail.length - 1 - i];
       if (!a) continue;
@@ -343,9 +339,7 @@
       ctx.fillStyle = 'rgba(240,236,223,' + (0.14 - i * 0.07) + ')';
       ctx.fill();
     }
-    // 投影
     ctx.beginPath(); ctx.arc(bx, by, 11, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,.32)'; ctx.fill();
-    // 球体
     var bg = ctx.createRadialGradient(bx - 4, by - 5, 1, bx, by, 10);
     bg.addColorStop(0, '#ffffff'); bg.addColorStop(0.62, '#efe9db'); bg.addColorStop(1, '#b5ad99');
     ctx.beginPath(); ctx.arc(bx, by, 9.5, 0, Math.PI * 2); ctx.fillStyle = bg; ctx.fill();
@@ -448,7 +442,6 @@
   function startSpinAnimation(number, onDone) {
     var idx = indexOfNumber(number);
     if (reducedMotion) {
-      // 无障碍：直接定格最终姿态
       wheelAngle = finalWheelAngle(idx, 0);
       ball.angle = -Math.PI / 2; ball.radius = POCKET_R; ball.visible = true;
       drawWheel(wheelAngle, { highlight: number, hiPulse: 1 });
@@ -458,11 +451,10 @@
       return;
     }
     var DUR = 8500;
-    var turns = 6 + Math.floor(Math.random() * 3);   // 6~8 圈，起速约 4 rev/s
+    var turns = 6 + Math.floor(Math.random() * 3);
     var W0 = wheelAngle;
     var Wf = finalWheelAngle(idx, turns);
-    // 阶段A：球绝对角匀速；targetAbs = 指针正下 + 2πK（保证结束帧精确）
-    var extraLaps = 9 + Math.floor(Math.random() * 3); // 球相对轮盘多转 9~11 圈
+    var extraLaps = 9 + Math.floor(Math.random() * 3);
     var relStart = Math.random() * Math.PI * 2;
     var relEnd = relStart + extraLaps * Math.PI * 2;
     var K = Math.ceil((Wf + relEnd + Math.PI / 2) / (Math.PI * 2));
@@ -473,30 +465,26 @@
 
     function frame(now) {
       var t = Math.min(1, (now - hiddenOffset - t0) / DUR);
-      var e5 = 1 - Math.pow(1 - t, 5);               // easeOutQuint
+      var e5 = 1 - Math.pow(1 - t, 5);
       wheelAngle = W0 + (Wf - W0) * e5;
-
-      var speed = Math.max(0, 1 - t);                // 0..1 归一速度（音效）
+      var speed = Math.max(0, 1 - t);
 
       if (t < 0.68) {
-        // 阶段A：球绝对角匀速推进（相对轮盘由快渐慢），轨道内旋
         var u = t / 0.68;
         ball.angle = absStart + (targetAbs - absStart) * u;
         ball.radius = R * 0.80 - u * (R * 0.80 - R * 0.70);
-        // 拨片检测：相对角跨过格边界 → 嗒嗒 + 径向来一个脉冲
         var rel = ball.angle - wheelAngle;
         var fret = Math.floor(rel / SEG);
         if (fret !== lastFret && t > 0.03) {
           lastFret = fret;
           sfxTick(0.55 + 0.45 * speed);
-          ball.radius += (Math.random() > 0.5 ? 1 : -1) * 1.6;   // 拨片径向微弹
+          ball.radius += (Math.random() > 0.5 ? 1 : -1) * 1.6;
         }
         ball.visible = true;
         pushTrail();
         setSpinVolume(0.045 + 0.10 * speed);
         setSpinSpeed(speed);
       } else {
-        // 阶段B：槽内阻尼回弹（A·e^(-5τ)·sin(12τ)）后精确归位
         var tau = (t - 0.68) / 0.32;
         var A = 0.07;
         ball.angle = -Math.PI / 2 + A * Math.exp(-5 * tau) * Math.sin(12 * tau);
@@ -514,7 +502,6 @@
       if (t < 1) {
         anim = requestAnimationFrame(frame);
       } else {
-        // 结束帧：零跳变（wheelAngle 已收敛 Wf，球角已收敛 -π/2，仅显式定格 + 高亮动画）
         wheelAngle = Wf;
         ball.angle = -Math.PI / 2;
         ball.radius = POCKET_R;
@@ -579,12 +566,11 @@
   // —— 开始转盘 ——
   SpinBtn.addEventListener('click', function () {
     if (spinning || spots.length === 0) return;
-    var total = spots.reduce(function (s, b) { return s + b.amount; }, 0);
+    var total = totalStake();
     if (!guest && session && total > balance) { toast('总注超过当前余额', true); return; }
     ensureAudio();
     spinning = true;
     enableSpinCheck();
-    renderPicks();
     overlay.style.display = 'none';
     led.textContent = '…';
     infoEl.textContent = '转盘旋转中…不可取消';
@@ -614,7 +600,7 @@
     }).then(function (r) {
       if (!r.ok) {
         pendingRoundId = null;
-        spinning = false; enableSpinCheck(); renderPicks();
+        spinning = false; enableSpinCheck();
         infoEl.textContent = r.j && r.j.error ? r.j.error : ('请求被拒绝（' + r.status + '）');
         toast(r.j && r.j.error ? r.j.error : '下注失败，请重试', true);
         return;
@@ -622,14 +608,14 @@
       var data = r.j;
       pendingRoundId = null;
       startSpinAnimation(data.number, function () {
-        spinning = false; enableSpinCheck(); renderPicks();
+        spinning = false; enableSpinCheck();
         setBalance(data.balance);
         showResult(data.number, data.bets, data.payout, data.balance);
         infoEl.textContent = '再来一轮：清空注单后重新放注';
       });
     }).catch(function () {
       pendingRoundId = roundId;
-      spinning = false; enableSpinCheck(); renderPicks();
+      spinning = false; enableSpinCheck();
       infoEl.textContent = '网络异常，请重试（同轮不会重复扣分）';
       toast('网络异常：本轮未确认，再次开始将自动续投', true);
     });
@@ -637,10 +623,10 @@
 
   document.getElementById('rcAgain').addEventListener('click', function () {
     overlay.style.display = 'none';
-    spots = [];
-    picks.color = null; picks.parity = null;
-    renderSpots(); renderPicks();
-    infoEl.textContent = '先选注，再开始转盘；结果由服务器裁决';
+    active.color = null; active.parity = null;
+    greenOn = false;
+    buildSpots(); renderButtons(); renderSpots();
+    infoEl.textContent = '点选颜色/奇偶即下注，再点取消；开始后不可取消';
   });
 
   drawStatic();
