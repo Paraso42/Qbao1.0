@@ -1,39 +1,47 @@
-# 服务器进程守护
+# 服务器现场手册 — systemd 守护
 
-当前服务器后端为裸 `nohup node server.js`，重启服务器后不会自动拉起。
-推荐切换为 systemd。
+> 当前生产形态：后端以 systemd 服务 `qbao-api` 运行（非 root 用户 `qbao`，NoNewPrivileges）；完整部署、备份与升级流程见 docs/DEPLOY.md。本文是服务器现场的速查手册。
 
-## 安装步骤（服务器上执行；服务以 qbao 用户运行，T22 非 root）
+## 常用命令
 
-> 前置：已创建部署用户 `qbao`，代码位于 `/home/qbao/qbao`（上传目录初始化见下文）。
+```bash
+systemctl status qbao-api               # 状态
+systemctl restart qbao-api              # 重启
+journalctl -u qbao-api -f               # 实时日志
+curl -s http://127.0.0.1:3000/health    # 健康检查（或 /api/v1/health）
+```
 
-1. 上传 service 文件：
+## 首次安装
+
+1. 创建部署用户与目录：代码位于 `/home/qbao/qbao`（含 server/、app/dist、downloads/、uploads/）。
+2. 上传单元文件并注册：
 
    ```bash
-   scp -i ~/.ssh/id_ed25519 \
-     server/deploy/qbao-api.service \
-     qbao@SERVER_IP:/etc/systemd/system/qbao-api.service
+   sudo cp server/deploy/qbao-api.service /etc/systemd/system/
+   sudo systemctl daemon-reload
    ```
 
-2. 初始化上传目录属主（必须早于服务启动，否则非 root 进程无写权限）：
+3. **先初始化上传目录属主**（非 root 进程无写权限会失败）：
 
    ```bash
    sudo bash server/deploy/prepare_dirs.sh /home/qbao/qbao
    ```
 
-3. 停止当前 nohup 进程并启用 systemd：
+4. 启用并启动，随后健康检查：
 
    ```bash
-   pkill -f 'node server.js' || true
-   systemctl daemon-reload
-   systemctl enable --now qbao-api
-   systemctl status qbao-api
+   sudo systemctl enable --now qbao-api
    curl -s http://127.0.0.1:3000/health
    ```
 
-## 上传目录（T16）
+## 升级后端
 
-服务端所有上传统一存放在部署根目录 `uploads/` 下，共 4 个子目录：
+1. 先备份数据库（pg_dump，见 docs/DEPLOY.md §7）。
+2. 上传新代码（保留 node_modules/、.env、downloads/、uploads/）。
+3. 有数据库变更时执行迁移：`cd /home/qbao/qbao/server && node scripts/run_migration.js`。
+4. 再次执行 prepare_dirs.sh 修正属主；`systemctl restart qbao-api`；健康检查通过。
+
+## 上传目录（收敛根：部署根 uploads/）
 
 | 目录 | 用途 |
 | ---- | ---- |
@@ -42,27 +50,8 @@
 | `uploads/pool` | 文件池（AI 出题资料） |
 | `uploads/avatars` | 用户头像 |
 
-服务启动时若目录缺失会自动创建；但 systemd 以非 root 用户运行时需提前初始化并修正属主：
+## 注意事项
 
-```bash
-sudo bash server/deploy/prepare_dirs.sh /home/qbao/qbao
-```
-
-## 常用命令
-
-```bash
-systemctl restart qbao-api
-systemctl stop qbao-api
-journalctl -u qbao-api -f
-```
-
-## 注意
-
-- `WorkingDirectory` 与 `server/.env` 路径必须保持 `/home/qbao/qbao/server`。
-- 服务以 `qbao` 用户运行（非 root）：`uploads/` 目录属主必须是 `qbao`（prepare_dirs.sh 负责），
-  否则上传/头像写入会失败；升级部署前同样先执行 prepare_dirs.sh。
-- 该服务不读取 `EnvironmentFile`，由 `server.js` 内的 `dotenv` 加载 `.env`。
-- 升级后端时：
-  1. `scp` 上传新文件
-  2. `systemctl restart qbao-api`
-  3. `curl -s http://127.0.0.1:3000/health`
+- `WorkingDirectory` 与 `server/.env` 路径固定在 `/home/qbao/qbao/server`；服务不读取 `EnvironmentFile`，由 `server.js` 内 dotenv 加载 `.env`。
+- 非 root 属主：`uploads/` 必须归 `qbao` 用户（prepare_dirs.sh 负责），否则上传 / 头像写入失败。
+- 桌面端储藏室 `downloads/`（QBAO_DESKTOP_DIR）位于 server/ 之外，发布清理脚本不会触碰。
