@@ -7,7 +7,7 @@
         <div class="sm-nav-item" :class="{ active: activeTab === 'personalize' }" @click="ui.setSettingsTab('personalize')"><Icon name="settings" :size="15" />个性化</div>
         <div class="sm-nav-item" :class="{ active: activeTab === 'aiconfig' }" @click="ui.setSettingsTab('aiconfig')"><Icon name="sparkle" :size="15" />AI 配置</div>
         <!-- 桌面端：桌面环境=应用信息/检查更新/回退；网页环境=国内镜像下载（v3.35 manifest-first） -->
-        <div class="sm-nav-item" :class="{ active: activeTab === 'desktop' }" @click="ui.setSettingsTab('desktop')"><Icon name="download" :size="15" />桌面端</div>
+        <div class="sm-nav-item" :class="{ active: activeTab === 'desktop' }" @click="ui.setSettingsTab('desktop')"><Icon name="download" :size="15" />{{ isDesktop ? '桌面端' : '下载中心' }}</div>
       </nav>
 
       <div class="sm-content">
@@ -135,52 +135,146 @@
                 <div v-if="desktopReleases.length === 0" class="dl-empty">暂无版本信息（{{ dlMsg }}）</div>
               </div>
               <div class="ai-actions">
-                <button class="btn btn-secondary btn-small" :disabled="webDl.loading" @click="loadDesktopVersions">刷新版本列表</button>
+                <button class="btn btn-secondary btn-small" :disabled="desktopListLoading" @click="loadDesktopVersions">刷新版本列表</button>
                 <button class="btn btn-secondary btn-small" @click="openIssuesPanel">遇到问题？向管理员反馈</button>
               </div>
             </div>
           </div>
-          <!-- 网页端：国内镜像下载分发（内容与桌面端不同：不含检查更新/开机自启） -->
+          <!-- 下载中心（网页环境）：Windows / Android / iOS 多端分发，自动识别当前设备 -->
           <div v-else class="card">
             <div class="settings-section">
-              <h4>桌面版应用 <span class="ver-badge b-latest">稳定版渠道</span></h4>
-              <p class="col-hint">电脑端独立窗口、开机自启、自动更新；账号数据与网页版云端同步。安装包由本站服务器提供（国内镜像）。</p>
-              <div class="settings-row"><label>最新版本</label><span class="row-val">{{ webDl.version }}</span></div>
-              <div class="settings-row"><label>安装包大小</label><span class="row-val">{{ webDl.sizeText }}</span></div>
-              <div class="settings-row"><label>更新日期</label><span class="row-val">{{ webDl.dateText }}</span></div>
-              <div class="ai-status" :class="'ai-status-' + webDl.state">{{ webDl.message }}</div>
-              <div class="ai-actions">
-                <button class="btn btn-primary btn-small" :disabled="!webDl.ready" @click="startWebDownload"><Icon name="download" :size="13" /> 下载桌面版</button>
-                <button class="btn btn-secondary btn-small" :disabled="webDl.loading" @click="loadWebDesktopRelease">刷新</button>
-                <button class="btn btn-secondary btn-small" @click="openDownloadPage">查看下载页</button>
+              <h4>Qbao 应用下载 <span class="ver-badge b-latest">多端分发</span></h4>
+              <p class="col-hint">Windows、Android 与 iOS 客户端与网页版账号数据云端同步。安装包由本站服务器直接分发（国内镜像），已自动识别您当前使用的设备类型。</p>
+              <div class="plat-tabs" role="tablist">
+                <button v-for="p in dlTabs" :key="p.id" type="button" class="plat-tab" :class="{ active: activeDl === p.id }" @click="switchDl(p.id)">
+                  {{ p.label }}<span v-if="p.id === detectedDl" class="plat-cur">本机</span>
+                </button>
               </div>
+              <div v-if="cur.loading" class="dl-loading">正在获取下载信息…</div>
             </div>
-            <div class="settings-section">
-              <h4>版本历史（可自行选择旧版）</h4>
-              <div class="dl-list">
-                <div v-for="r in webDl.releases" :key="r.version" class="dl-row">
-                  <div class="dl-row-main">
-                    <span class="dl-ver">v{{ r.version }}</span>
-                    <span class="ver-badge" :class="verBadgeClass(r, true)">{{ verBadgeText(r, true) }}</span>
+
+            <!-- Windows 桌面版 -->
+            <template v-if="activeDl === 'windows'">
+              <div v-if="cur.published" class="settings-section">
+                <h4>桌面版应用 <span class="ver-badge b-latest">稳定版渠道</span></h4>
+                <p class="col-hint">电脑端独立窗口、开机自启、自动更新；账号数据与网页版云端同步。</p>
+                <div class="settings-row"><label>最新版本</label><span class="row-val">{{ cur.version }}</span></div>
+                <div class="settings-row"><label>安装包大小</label><span class="row-val">{{ cur.sizeText }}</span></div>
+                <div class="settings-row"><label>更新日期</label><span class="row-val">{{ cur.dateText }}</span></div>
+                <div class="ai-status" :class="'ai-status-' + cur.state">{{ cur.message }}</div>
+                <div class="ai-actions">
+                  <button class="btn btn-primary btn-small" :disabled="!cur.ready" @click="startWinDownload"><Icon name="download" :size="13" /> 下载桌面版</button>
+                  <button class="btn btn-secondary btn-small" :disabled="cur.loading" @click="loadDlCenter">刷新</button>
+                  <button class="btn btn-secondary btn-small" @click="openDownloadPage">查看下载页</button>
+                </div>
+              </div>
+              <div v-else class="settings-section">
+                <div class="ai-status" :class="'ai-status-' + cur.state">{{ cur.message }}</div>
+              </div>
+              <div v-if="cur.published" class="settings-section">
+                <h4>版本历史（可自行选择旧版）</h4>
+                <div class="dl-list">
+                  <div v-for="r in cur.releases" :key="r.version" class="dl-row">
+                    <div class="dl-row-main">
+                      <span class="dl-ver">v{{ r.version }}</span>
+                      <span class="ver-badge" :class="verBadgeClass(r, true)">{{ verBadgeText(r, true) }}</span>
+                    </div>
+                    <div class="dl-row-sub">{{ r.sizeText }} · {{ r.dateText }}<span v-if="statOf(r)" class="dl-count">下载 {{ statOf(r) }} 次</span></div>
+                    <div class="dl-row-actions">
+                      <button class="btn btn-secondary btn-small" :disabled="!r.sha256" @click="copySha(r.sha256)">SHA256</button>
+                      <a v-if="canDownload(r)" class="btn btn-primary btn-small dl-a" :href="dlUrl(r.fileName)">下载</a>
+                      <button v-else class="btn btn-secondary btn-small" disabled>{{ r.retracted ? '已撤回' : '不可用' }}</button>
+                    </div>
                   </div>
-                  <div class="dl-row-sub">{{ r.sizeText }} · {{ r.dateText }}<span v-if="webStatsMap[r.version]" class="dl-count">下载 {{ webStatsMap[r.version] }} 次</span></div>
-                  <div class="dl-row-actions">
-                    <button class="btn btn-secondary btn-small" :disabled="!r.sha256" @click="copySha(r.sha256)">SHA256</button>
-                    <a v-if="canDownload(r)" class="btn btn-primary btn-small dl-a" :href="dlUrl(r.fileName)">下载</a>
-                    <button v-else class="btn btn-secondary btn-small" disabled>{{ r.retracted ? '已撤回' : '不可用' }}</button>
+                  <div v-if="cur.releases.length === 0" class="dl-empty">暂无版本信息</div>
+                </div>
+              </div>
+              <div v-if="cur.published" class="settings-section">
+                <h4>安全校验（SHA256）</h4>
+                <div class="sha-row">
+                  <code class="sha-code">{{ cur.sha256 || '—' }}</code>
+                  <button class="btn btn-secondary btn-small" :disabled="!cur.sha256" @click="copySha(cur.sha256)">复制</button>
+                </div>
+                <p class="ai-help-note">下载后可用校验值核对文件完整性。已安装旧版桌面端的用户，请在客户端「设置 → 桌面端」点击「检查更新」升级到最新版，无需重复下载；如新版本异常，也可在本页或下载页选择任意旧版覆盖安装。</p>
+              </div>
+            </template>
+
+            <!-- Android -->
+            <template v-else-if="activeDl === 'android'">
+              <div v-if="cur.published" class="settings-section">
+                <h4>Android 应用 <span class="ver-badge b-latest">{{ cur.version }}</span></h4>
+                <p class="col-hint">安卓手机 / 平板安装包（APK，Android 5.1 及以上）。安装时如提示「未知来源」请允许；本页与网页版数据云端同步，登录后多端一致。</p>
+                <div class="settings-row"><label>最新版本</label><span class="row-val">{{ cur.version }}</span></div>
+                <div class="settings-row"><label>安装包大小</label><span class="row-val">{{ cur.sizeText }}</span></div>
+                <div class="settings-row"><label>更新日期</label><span class="row-val">{{ cur.dateText }}</span></div>
+                <div class="ai-status" :class="'ai-status-' + cur.state">{{ cur.message }}</div>
+                <div class="ai-actions">
+                  <a v-if="cur.fileName" class="btn btn-primary btn-small dl-a" :href="appsDlUrl('android', cur.fileName)"><Icon name="download" :size="13" /> 下载 APK</a>
+                  <button class="btn btn-secondary btn-small" :disabled="cur.loading" @click="loadDlCenter">刷新</button>
+                </div>
+              </div>
+              <div v-else class="settings-section">
+                <h4>Android 应用</h4>
+                <div class="ai-status" :class="'ai-status-' + cur.state">{{ cur.message }}</div>
+              </div>
+              <div v-if="cur.published" class="settings-section">
+                <h4>版本历史</h4>
+                <div class="dl-list">
+                  <div v-for="r in cur.releases" :key="r.version" class="dl-row">
+                    <div class="dl-row-main">
+                      <span class="dl-ver">v{{ r.version }}</span>
+                      <span class="ver-badge" :class="verBadgeClass(r, true)">{{ verBadgeText(r, true) }}</span>
+                    </div>
+                    <div class="dl-row-sub">{{ r.sizeText }} · {{ r.dateText }}<span v-if="statOf(r)" class="dl-count">下载 {{ statOf(r) }} 次</span></div>
+                    <div class="dl-row-actions">
+                      <button class="btn btn-secondary btn-small" :disabled="!r.sha256" @click="copySha(r.sha256)">SHA256</button>
+                      <a v-if="canDownload(r)" class="btn btn-primary btn-small dl-a" :href="appsDlUrl('android', r.fileName)">下载</a>
+                      <button v-else class="btn btn-secondary btn-small" disabled>{{ r.retracted ? '已撤回' : '不可用' }}</button>
+                    </div>
+                  </div>
+                  <div v-if="cur.releases.length === 0" class="dl-empty">暂无版本信息</div>
+                </div>
+                <p class="ai-help-note">升级安装包请保留并重复使用同一次下载来源（正式签名不变），覆盖安装不会影响数据。</p>
+              </div>
+            </template>
+
+            <!-- iOS -->
+            <template v-else-if="activeDl === 'ios'">
+              <div v-if="cur.published" class="settings-section">
+                <h4>iOS 应用 <span class="ver-badge b-latest">{{ cur.version }}</span></h4>
+                <p class="col-hint">iPhone / iPad 安装包（.ipa，需 Apple 签名安装）。</p>
+                <div class="settings-row"><label>最新版本</label><span class="row-val">{{ cur.version }}</span></div>
+                <div class="settings-row"><label>安装包大小</label><span class="row-val">{{ cur.sizeText }}</span></div>
+                <div class="settings-row"><label>更新日期</label><span class="row-val">{{ cur.dateText }}</span></div>
+                <div class="ai-status" :class="'ai-status-' + cur.state">{{ cur.message }}</div>
+                <div class="ai-actions">
+                  <a v-if="cur.fileName" class="btn btn-primary btn-small dl-a" :href="appsDlUrl('ios', cur.fileName)"><Icon name="download" :size="13" /> 下载 iOS 包</a>
+                  <button class="btn btn-secondary btn-small" :disabled="cur.loading" @click="loadDlCenter">刷新</button>
+                </div>
+              </div>
+              <div v-else class="settings-section">
+                <h4>iOS 应用</h4>
+                <p class="col-hint">iOS 安装包需在 macOS 上使用 Xcode 签名出包（需 Apple Developer 账号），当前尚未发布。iPhone / iPad 用户可先用 Safari 打开本站，通过「分享 → 添加到主屏幕」获得全屏入口；正式版发布后此处将自动出现可下载版本。</p>
+                <div class="ai-status ai-status-info">{{ cur.message }}</div>
+              </div>
+              <div v-if="cur.published && cur.releases.length" class="settings-section">
+                <h4>版本历史</h4>
+                <div class="dl-list">
+                  <div v-for="r in cur.releases" :key="r.version" class="dl-row">
+                    <div class="dl-row-main">
+                      <span class="dl-ver">v{{ r.version }}</span>
+                      <span class="ver-badge" :class="verBadgeClass(r, true)">{{ verBadgeText(r, true) }}</span>
+                    </div>
+                    <div class="dl-row-sub">{{ r.sizeText }} · {{ r.dateText }}<span v-if="statOf(r)" class="dl-count">下载 {{ statOf(r) }} 次</span></div>
+                    <div class="dl-row-actions">
+                      <button class="btn btn-secondary btn-small" :disabled="!r.sha256" @click="copySha(r.sha256)">SHA256</button>
+                      <a v-if="canDownload(r)" class="btn btn-primary btn-small dl-a" :href="appsDlUrl('ios', r.fileName)">下载</a>
+                      <button v-else class="btn btn-secondary btn-small" disabled>{{ r.retracted ? '已撤回' : '不可用' }}</button>
+                    </div>
                   </div>
                 </div>
-                <div v-if="webDl.releases.length === 0" class="dl-empty">暂无版本信息</div>
               </div>
-            </div>
-            <div class="settings-section">
-              <h4>安全校验（SHA256）</h4>
-              <div class="sha-row">
-                <code class="sha-code">{{ webDl.sha256 || '—' }}</code>
-                <button class="btn btn-secondary btn-small" :disabled="!webDl.sha256" @click="copySha256">复制</button>
-              </div>
-              <p class="ai-help-note">下载后可用校验值核对文件完整性。已安装旧版桌面端的用户，请在桌面端「设置 → 桌面端」点击「检查更新」升级到最新版，无需重复下载；如新版本异常，也可在本页或下载页选择任意旧版覆盖安装。</p>
-            </div>
+            </template>
           </div>
         </section>
       </div>
@@ -194,7 +288,7 @@ import { useUiStore } from '../../../stores/ui'
 import { useDataStore } from '../../../stores/data'
 import { useIssuesStore } from '../../../stores/issues'
 import { IS_DESKTOP, desktopBridge, API_BASE } from '../../../core/env'
-import { fetchDesktopManifest, fetchDesktopStats, parseReleases, formatSize, formatDate } from '../../../services/desktopRelease'
+import { fetchDesktopManifest, fetchDesktopStats, fetchAppsManifest, fetchAppsStats, appsDownloadUrl, parseReleases, formatSize, formatDate } from '../../../services/desktopRelease'
 import { applyFontSizes } from '../../../core/fontSizes'
 import Modal from '../../ui/Modal.vue'
 import Icon from '../../ui/Icon.vue'
@@ -244,12 +338,38 @@ const updateMessage = ref('启动应用后会自动检查更新；有新版本�
 const updateChecking = ref(false)
 const updatePercent = ref(0)
 
-// 网页端：桌面版下载（国内镜像，v3.35 manifest-first——内容与桌面端不同，不跳转 GitHub）
-const webDl = ref({ ready: false, loading: false, state: 'info', message: '正在获取下载信息…', version: '—', sizeText: '—', dateText: '—', sha256: '', fileName: '', releases: [] })
-const webStatsMap = ref({})
+// 下载中心（网页环境，多端分发）：windows/android/ios 各自独立状态，UA 自动推荐当前设备
+const dlTabs = [
+  { id: 'windows', label: 'Windows' },
+  { id: 'android', label: 'Android' },
+  { id: 'ios', label: 'iOS' }
+]
+function detectDlPlatform() {
+  if (typeof navigator === 'undefined') return 'windows'
+  const ua = String(navigator.userAgent || '')
+  if (/android/i.test(ua)) return 'android'
+  if (/iphone|ipad|ipod/i.test(ua)) return 'ios'
+  return 'windows'
+}
+const detectedDl = ref(detectDlPlatform())
+const activeDl = ref(detectDlPlatform())
+function emptyDl() {
+  return { state: 'info', message: '正在获取下载信息…', loading: false, ready: false, published: false, version: '—', sizeText: '—', dateText: '—', sha256: '', fileName: '', releases: [] }
+}
+const dls = ref({ windows: emptyDl(), android: emptyDl(), ios: emptyDl() })
+const winStats = ref({})   // windows：version → 下载次数
+const appsStats = ref({})  // android/ios：fileName → 下载次数
+const cur = computed(() => dls.value[activeDl.value] || emptyDl())
+function statOf(r) {
+  if (!r) return 0
+  const map = activeDl.value === 'windows' ? winStats.value : appsStats.value
+  const key = activeDl.value === 'windows' ? r.version : r.fileName
+  return map[key] || 0
+}
 const dlStatsMap = ref({})
 const desktopReleases = ref([])
 const dlMsg = ref('')
+const desktopListLoading = ref(false)
 const rollback = ref({ active: false, percent: 0 })
 
 function buildStatsMap(j) {
@@ -260,41 +380,73 @@ function buildStatsMap(j) {
   return m
 }
 
-async function loadWebDesktopRelease() {
-  webDl.value.loading = true
-  webDl.value.state = 'info'
-  webDl.value.message = '正在获取下载信息…'
-  try {
-    const [mani, stats] = await Promise.all([
-      fetchDesktopManifest(),
-      fetchDesktopStats().catch(() => null),
-    ])
-    const releases = parseReleases(mani)
-    webStatsMap.value = buildStatsMap(stats)
-    webDl.value.releases = releases
-    const top = releases.find((r) => !r.retracted) || releases[0] || null
-    if (top) {
-      webDl.value.version = 'v' + top.version
-      webDl.value.sizeText = top.sizeText
-      webDl.value.dateText = top.dateText
-      webDl.value.sha256 = top.sha256 || ''
-      webDl.value.fileName = top.fileName
-    }
-    webDl.value.ready = true
-    webDl.value.state = 'ok'
-    webDl.value.message = '已就绪，点击「下载桌面版」开始下载'
-  } catch (e) {
-    webDl.value.ready = false
-    webDl.value.state = 'err'
-    webDl.value.message = '获取下载信息失败（' + ((e && e.message) || '网络错误') + '），请重试'
-  } finally {
-    webDl.value.loading = false
+function applyTopDl(s, top) {
+  if (!top) {
+    s.version = '—'; s.sizeText = '—'; s.dateText = '—'; s.sha256 = ''; s.fileName = ''
+    return
   }
+  s.version = 'v' + top.version
+  s.sizeText = top.sizeText
+  s.dateText = top.dateText
+  s.sha256 = top.sha256 || ''
+  s.fileName = top.fileName
+}
+async function loadDlCenter() {
+  const p = activeDl.value
+  const s = dls.value[p]
+  if (s.loading) return
+  s.loading = true
+  s.state = 'info'
+  s.message = '正在获取下载信息…'
+  try {
+    if (p === 'windows') {
+      const [mani, stats] = await Promise.all([fetchDesktopManifest(), fetchDesktopStats().catch(() => null)])
+      const releases = parseReleases(mani)
+      winStats.value = buildStatsMap(stats)
+      s.releases = releases
+      const top = releases.find((r) => !r.retracted) || releases[0] || null
+      applyTopDl(s, top)
+      s.published = !!top
+      s.message = top ? '已就绪，点击「下载桌面版」开始下载' : '暂无可用版本'
+    } else {
+      const [mani, stats] = await Promise.all([fetchAppsManifest(null, p), fetchAppsStats(null, p).catch(() => null)])
+      const releases = parseReleases(mani)
+      const m = {}
+      if (stats && Array.isArray(stats.perFile)) for (const f of stats.perFile) m[f.fileName] = f.downloads
+      appsStats.value = m
+      s.releases = releases
+      const top = releases.find((r) => !r.retracted) || releases[0] || null
+      applyTopDl(s, top)
+      s.published = !!top
+      s.message = top ? '已就绪，点击下载' + (p === 'android' ? ' APK' : ' iOS 安装包') + '开始安装' : '该平台暂无可下载版本'
+    }
+    s.ready = true
+    s.state = 'ok'
+  } catch (e) {
+    s.ready = false
+    s.published = false
+    s.state = 'info'
+    const is404 = !!(e && /HTTP 404/.test(String(e.message || '')))
+    s.message = is404
+      ? (p === 'ios' ? 'iOS 安装包尚未发布（需 macOS + Apple Developer 签名出包）' : '该平台安装包暂未发布，请稍后再试')
+      : '获取下载信息失败（' + ((e && e.message) || '网络错误') + '），请重试'
+  } finally {
+    s.loading = false
+  }
+}
+function switchDl(id) {
+  if (!dlTabs.some((p) => p.id === id)) return
+  activeDl.value = id
+  const s = dls.value[id]
+  if (!s.ready && !s.loading) loadDlCenter()
+}
+function appsDlUrl(platform, fileName) {
+  return appsDownloadUrl(platform, fileName)
 }
 
 // 桌面端：历史版本列表（manifest 直连当前服务器）
 async function loadDesktopVersions() {
-  webDl.value.loading = true
+  desktopListLoading.value = true
   dlMsg.value = '加载中…'
   try {
     const [mani, stats] = await Promise.all([
@@ -308,7 +460,7 @@ async function loadDesktopVersions() {
     desktopReleases.value = []
     dlMsg.value = '获取失败（' + ((e && e.message) || '网络错误') + '）'
   } finally {
-    webDl.value.loading = false
+    desktopListLoading.value = false
   }
 }
 
@@ -373,18 +525,16 @@ async function downloadVersionClick(r) {
   }
 }
 
-function startWebDownload() {
-  if (!webDl.value.ready) return
+function startWinDownload() {
+  const w = dls.value.windows
+  if (!w.ready || !w.fileName) return
   const a = document.createElement('a')
   a.href = API_BASE + '/desktop/download'
-  a.download = webDl.value.fileName || ''
+  a.download = w.fileName
   document.body.appendChild(a)
   a.click()
   a.remove()
-  ui.toast('开始下载桌面版 ' + webDl.value.version, 'info')
-}
-function copySha256() {
-  copySha(webDl.value.sha256)
+  ui.toast('开始下载桌面版 ' + w.version, 'info')
 }
 function copySha(sha) {
   if (!sha) return
@@ -501,13 +651,13 @@ watch(() => ui.settingsOpen, (open) => {
     if (activeTab.value === 'aiconfig') {
       if (aiCfgRef.value) aiCfgRef.value.loadForm()
     }
-    if (activeTab.value === 'desktop') { if (isDesktop.value) { loadDesktopInfo(); loadDesktopVersions() } else loadWebDesktopRelease() }
+    if (activeTab.value === 'desktop') { if (isDesktop.value) { loadDesktopInfo(); loadDesktopVersions() } else loadDlCenter() }
   }
 })
 watch(() => ui.settingsTab, (tab) => {
   if (!ui.settingsOpen) return
   if (tab === 'aiconfig') { if (aiCfgRef.value) aiCfgRef.value.loadForm() }
-  if (tab === 'desktop') { if (isDesktop.value) { loadDesktopInfo(); loadDesktopVersions() } else loadWebDesktopRelease() }
+  if (tab === 'desktop') { if (isDesktop.value) { loadDesktopInfo(); loadDesktopVersions() } else loadDlCenter() }
 })
 
 onMounted(() => { bindUpdateStatus(); bindRollbackProgress(); applyFontSizes(settings.value) })
@@ -636,4 +786,19 @@ onMounted(() => { bindUpdateStatus(); bindRollbackProgress(); applyFontSizes(set
   .settings-row { flex-wrap: wrap; }
   .settings-row label { min-width: 100%; }
 }
+
+.plat-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+.plat-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 16px; border-radius: 20px; border: 1px solid var(--border-default);
+  background: var(--surface-card); color: var(--text-secondary);
+  font-size: var(--fs-sm); cursor: pointer;
+  transition: all var(--transition-fast); touch-action: manipulation;
+}
+.plat-tab:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.plat-tab.active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; font-weight: 600; }
+.plat-cur { font-size: 10px; background: rgba(255,255,255,0.25); padding: 1px 6px; border-radius: 10px; }
+.plat-tab:not(.active) .plat-cur { background: var(--surface-hover); color: var(--text-muted); }
+.dl-loading { color: var(--text-muted); font-size: var(--fs-xs); padding: 2px 0 6px; }
+
 </style>

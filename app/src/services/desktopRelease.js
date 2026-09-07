@@ -33,6 +33,24 @@ export async function fetchDesktopStats(fetcher) {
   return requestJson(fetcher, API_BASE + '/desktop/stats', '下载统计')
 }
 
+// —— 手机端（Android / iOS）统一分发（与桌面端同一份 manifest，独立端点）——
+// 版本清单：/api/v1/apps/manifest?platform=android|ios
+export async function fetchAppsManifest(fetcher, platform) {
+  const j = await requestJson(fetcher, API_BASE + '/apps/manifest?platform=' + encodeURIComponent(platform), '应用版本清单')
+  if (!Array.isArray(j.releases)) throw new Error('应用版本清单无效')
+  return j
+}
+
+// 按文件下载统计：/api/v1/apps/stats?platform= → { perFile: [{fileName, downloads}] }
+export async function fetchAppsStats(fetcher, platform) {
+  return requestJson(fetcher, API_BASE + '/apps/stats?platform=' + encodeURIComponent(platform), '应用下载统计')
+}
+
+// 手机端下载地址（直接下载安装包）
+export function appsDownloadUrl(platform, fileName) {
+  return API_BASE + '/apps/download?platform=' + encodeURIComponent(platform) + '&file=' + encodeURIComponent(fileName)
+}
+
 // 清单 → 展示层结构（current/stopped/retracted 徽标所需字段）
 export function parseReleases(j) {
   if (!j || !Array.isArray(j.releases)) return []

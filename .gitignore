@@ -70,3 +70,5 @@ local/keys/
 app/dist/
 app/.tmp/
 local/keys/
+downloads/
+.chatecnu-work/

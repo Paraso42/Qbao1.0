@@ -1,0 +1,13 @@
+{
+  "name": "qbao-gamehall-mobile",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Qbao 游戏空间移动端壳（Capacitor 6）：Android APK + iOS 工程",
+  "scripts": {
+    "sync": "cap sync",
+    "android:add": "cap add android",
+    "ios:add": "cap add ios",
+    "android:build": "cap sync android && cd android && gradlew.bat assembleRelease",
+    "android:build:debug": "cap sync android && cd android && gradlew.bat assembleDebug"
+  }
+}

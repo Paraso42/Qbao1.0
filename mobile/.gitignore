@@ -1,0 +1,11 @@
+node_modules/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/*.log
+ios/App/Pods/
+ios/App/App/public/
+ios/build/
+www/
+qbao-release.keystore
