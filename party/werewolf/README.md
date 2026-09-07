@@ -29,7 +29,7 @@ Qbao 游戏大厅的网页版多人狼人杀。上游 [xiong35/werewolf](https:/
 3. 全中文界面（第N天/秒等）
 4. 构建链现代化：Vite 5 + @vitejs/plugin-vue 5 + sass 1；TS 4.9 + esModuleInterop + skipLibCheck；
    依赖钉上游大版本（koa@2、@koa/cors@3、koa-body@4、koa-logger@3、koa-router@10、socket.io@4）
-5. `CLIENT_BASE_URL` 指向生产公网地址（二维码加入链接）
+5. `CLIENT_BASE_URL` 运行时同源（二维码加入链接随部署域名自动正确）
 
 ## 本地重建
 
@@ -43,7 +43,7 @@ cd werewolf-frontend && npm install && npm run build  # 产物 werewolf-frontend
 > 说明：开发环境依赖经由 ChatECNU Work 的 dependency_install 安装（npm 直装被沙箱重定向），
 > node_modules 与 dist 不入库。生产运行依赖为「运行时闭包」（koa 栈传递依赖，纯 JS）打包部署。
 
-## 部署（生产 114.55.210.82）
+## 部署（生产：https://questionbox.cn（Cloudflare 边缘 → 香港 Caddy），回源大陆 114.55.210.82）
 
 1. `deploy/qbao-werewolf.service` → `/etc/systemd/system/`，`systemctl daemon-reload && systemctl enable --now qbao-werewolf`
 2. 后端：`werewolf-backend/dist`（含 `werewolf-frontend/shared` 编译副本）→ `/home/qbao/qbao/party/werewolf/dist`

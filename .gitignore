@@ -72,3 +72,6 @@ app/.tmp/
 local/keys/
 downloads/
 .chatecnu-work/
+
+# ---- werewolf 前端本地构建产物（入库副本固定放 app/public/games/werewolf）----
+party/werewolf/werewolf-frontend/dist/

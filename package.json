@@ -7,6 +7,15 @@
     "@capacitor/cli": "^6.2.2",
     "@capacitor/core": "^6.2.2",
     "@capacitor/ios": "^6.2.2",
-    "sharp": "^0.35.4"
+    "@vitejs/plugin-vue": "5.0",
+    "axios": "1.7",
+    "easyqrcodejs": "^4.3.3",
+    "sass": "1.77",
+    "sha256": "^0.2.0",
+    "sharp": "^0.35.4",
+    "socket.io-client": "4.7",
+    "vite": "5.4",
+    "vue": "3.4",
+    "vue-router": "4.3"
   }
 }

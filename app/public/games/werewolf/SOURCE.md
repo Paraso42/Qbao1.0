@@ -18,7 +18,9 @@
 4. 构建链现代化（仅构建期）：前端 Vite 1 rc13 → **Vite 5 + @vitejs/plugin-vue 5 + sass 1**；
    后端 TypeScript 4.9（`skipLibCheck` + `esModuleInterop`），依赖钉上游大版本
    （koa@2 / @koa/cors@3 / koa-body@4 / koa-logger@3 / koa-router@10 / socket.io@4）。
-5. 二维码加入链接（`CLIENT_BASE_URL`）指向生产站点公网地址。
+5. 二维码加入链接（`CLIENT_BASE_URL`）改**运行时同源**：`(globalThis.location?.origin || "") + GAME_BASE`，
+   部署在任何域名（http/https）下扫码链接自动正确；历史版本硬编码 http://114.55.210.82。
+   （`globalThis` 守卫兼容后端 Node tsc 编译 shared/constants.ts。）
 6. 路由兜底（v2 修复）：路由表末尾追加 `/:pathMatch(.*)*` → 重定向首页。
    原因：直接访问 `/games/werewolf/index.html` 时 Vue Router 无匹配路由导致白屏；
    同时大厅入口统一用尾斜杠 URL `/games/werewolf/`。另修掉 viewport meta

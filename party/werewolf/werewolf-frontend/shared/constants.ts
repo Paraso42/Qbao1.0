@@ -5,8 +5,9 @@
 //  - 后端 socket.io 监听路径保持 WS_PATH_CLIPED(/werewolf-ws) 不变。
 export const GAME_BASE = "/games/werewolf";
 
-// 二维码里的加入链接必须是绝对地址（手机扫码）；本地调试指向 localhost，生产替换为站点域名
-export const CLIENT_BASE_URL = "http://114.55.210.82" + GAME_BASE;
+// 二维码里的加入链接必须是绝对地址（手机扫码）；改为运行时同源：部署在任何 https 域名下自动正确，
+// 本地 vite dev 也为 localhost；用 globalThis 守卫以兼容 Node 侧 tsc 编译（无 DOM lib）
+export const CLIENT_BASE_URL = ((globalThis as { location?: { origin?: string } }).location?.origin || "") + GAME_BASE;
 // ===== end Qbao 适配 =====
 
 export const SERVER_DOMAIN = "";
