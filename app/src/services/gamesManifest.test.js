@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { GAMES, GAME_IDS, gameSrc } from './gamesManifest'
 
 describe('gamesManifest 清单完整性', () => {
-  it('包含全部五款游戏且 id 唯一', () => {
-    expect(GAME_IDS).toEqual(['2048', 'froggy', 'gridgarden', 'tetris', 'roulette'])
+  it('包含全部六款游戏且 id 唯一', () => {
+    expect(GAME_IDS).toEqual(['2048', 'froggy', 'gridgarden', 'tetris', 'werewolf'])
     expect(new Set(GAME_IDS).size).toBe(GAME_IDS.length)
   })
 

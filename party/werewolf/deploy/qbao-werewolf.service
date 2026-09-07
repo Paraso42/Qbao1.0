@@ -1,0 +1,21 @@
+[Unit]
+Description=Qbao Werewolf Party Game (xiong35/werewolf Koa+socket.io)
+Documentation=https://github.com/xiong35/werewolf
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/qbao/qbao/party/werewolf
+ExecStart=/usr/bin/node dist/werewolf-backend/src/index.js
+Restart=always
+RestartSec=3
+TimeoutStopSec=15
+Environment=NODE_ENV=production
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

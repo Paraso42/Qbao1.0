@@ -12,6 +12,7 @@
 | `froggy/` | Flexbox Froggy | thomaspark/flexboxfroggy | MIT | 9a6feab |
 | `gridgarden/` | Grid Garden | thomaspark/gridgarden | MIT | 0e262f7 |
 | `tetris/` | 俄罗斯方块 | jakesgordon/javascript-tetris | MIT | e5c0c42 |
+| `werewolf/` | 狼人杀（网页版多人联机） | xiong35/werewolf | MIT | 26a77c0 |
 | `common/` | 共享库（jquery / animate.css / qbao-hook.js） | 随 gridgarden 上游提交 | MIT / Apache-2.0 | — |
 
 ## 引入与修改纪律
@@ -25,7 +26,8 @@
 
 ## 隐私与安全
 
-- 游戏运行时无任何外部网络请求（全部静态自托管）；无广告、无统计。
+- 单机游戏运行时无任何外部网络请求（全部静态自托管）；无广告、无统计。
+- 狼人杀为唯一联机游戏：本目录存放其前端构建产物（指向自身房间服务）；后端服务与源码见仓库 `party/werewolf/`（systemd `qbao-werewolf`，端口 3011，nginx 子路径 `/games/werewolf/`）。
 - `common/qbao-hook.js` 仅读取登录凭据并上报成绩，不写不删 localStorage。
 - 桌面端仅经既有 `qbao:secret-load` IPC 通道读取令牌，不新增密钥面。
 

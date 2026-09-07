@@ -3,7 +3,7 @@
 const { z } = require('zod');
 
 // 与 app/public/games/manifest（gamesManifest.js）保持同步的游戏白名单
-const GAME_IDS = ['2048', 'froggy', 'gridgarden', 'tetris', 'roulette'];
+const GAME_IDS = ['2048', 'froggy', 'gridgarden', 'tetris', 'werewolf'];
 
 // POST /api/v1/games — 单游戏成绩上报
 const reportSchema = z.object({

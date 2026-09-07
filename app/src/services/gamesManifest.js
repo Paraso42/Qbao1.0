@@ -50,15 +50,15 @@ export const GAMES = [
     commit: 'e5c0c42',
   },
   {
-    id: 'roulette',
-    name: '俄罗斯轮盘',
-    tag: '积分',
-    desc: '赌场转盘：押注红黑/奇偶/组合/绿色，小球落定翻倍结算（虚拟积分，服务端裁决）。',
-    src: 'games/roulette/index.html',
-    kb: 40,
+    id: 'werewolf',
+    name: '狼人杀',
+    tag: '派对',
+    desc: '多人联机狼人杀：免卡牌、免主持人，扫码或房号加入同局。',
+    src: 'games/werewolf/index.html',
+    kb: 508,
     license: 'MIT',
-    upstream: 'Paraso42/Qbao',
-    commit: 'self-built',
+    upstream: 'xiong35/werewolf',
+    commit: '26a77c0',
   },
 ]
 

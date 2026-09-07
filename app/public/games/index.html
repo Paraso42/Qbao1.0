@@ -84,6 +84,7 @@
   .card .tag.learn { background: var(--brand-light); color: var(--brand); }
   .card .tag.fun { background: rgba(238, 179, 67, .16); color: #c98a17; }
   .card .tag.self { background: rgba(46, 158, 91, .14); color: var(--ok); }
+  .card .tag.party { background: rgba(139, 92, 246, .15); color: #8b5cf6; }
   .card .score { color: var(--muted); }
   .card .go { margin-top: 4px; text-align: center; background: var(--brand); color: #fff; border-radius: 10px; padding: 8px 0; font-size: 13px; font-weight: 600; }
   .guest-note {
@@ -99,7 +100,7 @@
 <body>
 <header>
   <div class="logo"><span class="pad">🎮</span> Qbao 游戏空间</div>
-  <div id="userbox"><span id="ptsBox" class="pts" style="display:none"></span><span id="who" class="guest">加载中…</span><a id="backlink" href="../index.html">返回 Qbao</a></div>
+  <div id="userbox"><span id="who" class="guest">加载中…</span><a id="backlink" href="../index.html">返回 Qbao</a></div>
 </header>
 <p class="guest-note" id="guestNote" style="display:none">当前为游客模式：可试玩，成绩不保存。登录 Qbao 后成绩将按账号保存。</p>
 <main>
@@ -131,12 +132,12 @@
     <span class="meta"><span class="tag fun">休闲</span><span class="score"></span></span>
     <span class="go">开始游戏</span>
   </a>
-  <a class="card" href="./roulette/index.html" data-id="roulette">
-    <span class="icon">🎰</span>
-    <h2>俄罗斯轮盘</h2>
-    <p>赌场转盘：押注红/黑、奇/偶、红+偶、黑+奇或绿色(0)，小球落定按倍率翻倍结算（虚拟积分，服务端裁决）。</p>
-    <span class="meta"><span class="tag self">积分</span><span class="score"></span></span>
-    <span class="go">进入牌桌</span>
+  <a class="card" href="./werewolf/" data-id="werewolf">
+    <span class="icon">🐺</span>
+    <h2>狼人杀</h2>
+    <p>多人联机狼人杀：免卡牌、免主持人，手机扫码或输房号加入，9 人一桌随时开局。</p>
+    <span class="meta"><span class="tag party">派对</span><span class="score"></span></span>
+    <span class="go">开始游戏</span>
   </a>
 
 </main>
@@ -184,16 +185,6 @@
           var box = card.querySelector('.score');
           if (data[id]) box.textContent = fmt(id, data[id]);
         });
-      })
-      .catch(function () {});
-    fetch(base + '/api/v1/points/balance', { headers: { 'Authorization': 'Bearer ' + s.token } })
-      .then(function (res) { return res.ok ? res.json() : null; })
-      .then(function (j) {
-        var box = document.getElementById('ptsBox');
-        if (box && j && typeof j.balance === 'number') {
-          box.textContent = '积分 ' + j.balance;
-          box.style.display = 'inline-block';
-        }
       })
       .catch(function () {});
   });

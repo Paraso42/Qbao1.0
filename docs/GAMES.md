@@ -37,42 +37,31 @@
 `window.__qbaoGame.report(...)`，3 秒合并窗口后 POST）。钩子仅**读取**凭据
 （网页：同源 localStorage `qbao_token` 混淆值，只读不写；桌面：既有 `qbao:secret-load` IPC）。
 
-## 四、联机路线图（预留，未实现）
+## 四、联机游戏（狼人杀 · 已上线）
 
-首版为纯单机。联机第二期选型已定方向——**房间制异步对战**（复用现有账号体系与 REST，
-不做 WebSocket，保持服务器低负载）：
+派对桌游「狼人杀」经开源项目 [xiong35/werewolf](https://github.com/xiong35/werewolf)（MIT, commit 26a77c0）
+自托管接入，**不依赖任何外部服务**：
+
+- 入口：游戏大厅 `/games/` 卡片 → `/games/werewolf/`（与主站同源，nginx 子路径 `location ^~ /games/werewolf/`）。
+- 架构：前端静态由 nginx 直出；房间实时逻辑为独立 Node 服务（Koa + socket.io，systemd 单元
+  `qbao-werewolf`，监听 127.0.0.1:3011）：
+  - HTTP API：`/games/werewolf/api/*` → nginx 剥前缀 → 3011（建房/加入/行动）；
+  - WebSocket：`/games/werewolf/werewolf-ws/*` → 3011 原样透传（含 Upgrade 头）。
+- 数据：房间与对局状态只在服务端内存（房间号 6 位，12 小时自动清理，重启即清零），
+  **不落库、不接账号体系**——游客亦可玩，不写 `user_games_stats`、不参与积分（桌游按局结算，后续再议）。
+- 本地化修改（MIT 允许，记录于 `party/werewolf/README.md`）：同源子路径接线、运行时资源前缀、
+  「Day N」→「第N天」等全中文界面、构建链现代化（Vite 5 + Vue 3 官方插件、TS 4.9）。
+- 重建/部署手册：`party/werewolf/README.md`（构建、闭包依赖、systemd、nginx 片段均归档在
+  `party/werewolf/deploy/`）。
+
+后续联机扩展（预留方向不变）——**房间制异步对战**（复用现有账号体系与 REST，不做 WebSocket，
+保持服务器低负载）：
 - 数据层：与 `user_games_stats` 同 schema 族新增 `game_rooms(id, owner_id, game_id, state jsonb, rev, created_at)`
   与 `game_moves(room_id, seq, user_id, move jsonb)`；
 - 玩法：井字棋 / 五子棋 / 黑白棋短回合制，客户端轮询 `GET /api/v1/games/rooms/:id`；
 - 鉴权/限流/隔离全部沿用现有体系；「单行状态 + 追加移动」设计天然支持回放。
 
-## 五、积分对接（v1 试点已生效：俄罗斯轮盘）
-
-**俄罗斯轮盘**是积分体系的第一个真实消费场景（v3.38，纯单机一轮制）。其余
-游戏事件的 pointsBridge 对接口保持 v0（仅校验与留痕，不产生积分变动）。
-
-### 俄罗斯轮盘（赌场转盘）契约
-
-- 入口：games/roulette/（自研，MIT）；规则常量见 server/src/config/roulette.js（前端同名常量仅渲染）。
-- 端点：POST /api/v1/roulette/spin，body { roundId: UUID, bets: [{type, value, amount}] }，requireAuth。
-- 注位类型与倍率（命中返还含本金的总额，未中扣注金）：
-
-| 类型 | value | 倍率 | 说明 |
-| ---- | ----- | ---- | ---- |
-| color | red / black | 2× | 0（绿）不属任何颜色 |
-| parity | odd / even | 2× | 0 无奇偶 |
-| combo | red+even / black+odd | 4× | 默认仅对称两对（各 8/37）；放开全组合见 config 注释 |
-| green | green | 35× | 仅 0 命中；绿色无数字，不存在组合 70× |
-
-- 结算（服务端权威）：crypto.randomInt(0,37) 开奖 → 事务内扣注 points_ledger(reason=roulette_bet)
-  → 判定各注位 → 总派彩 >0 时 awardPoints(reason=roulette_win, refType=roulette, refId=roundId)（台账 UNIQUE 幂等兜底）。
-- 护栏：单注位 1~100000、一局 ≤3 注位、总注 ≤100000（INT 硬顶）、每日押注总额 ≤500
-  （config DAILY_STAKE_CAP，0 关闭）、既有 120/min/IP 限流。
-- 幂等：同一 roundId 重放直接返回首笔结果（roulette_bets 表 + ON CONFLICT），超时重试不会双扣；roundId 归属他人 → 409。
-- 余额与台账：users.storage_points（学期清零联动）；个人中心积分页显示「轮盘押注 / 轮盘赢彩」明细。
-  游客为演示模式（虚拟 500 分、本地随机、不落库）。
-- 组合注数学说明：默认「红+偶」「黑+奇」各 8/37 数字、4× 下庄家稳定微利；
-  若放开「红+奇」（10/37）须保留每日上限防套利。
+## 五、积分对接（v0 预留，未生效）
 
 ### 其余游戏事件（v0 预留，未生效）
 
@@ -84,5 +73,4 @@
   契约 v1 以 refType=game 扩展 points/claims。
 
 > 长线观察项：user_games_stats 单行 JSONB 体积随游戏数增长，警戒线为单行 >64KB
-> （当前 4 款 × 4 字段远低于此；超限时拆列为游戏独立列）。roulette_bets 按局落一行
-> （<1KB），v0 规模下无膨胀风险。
+> （当前 5 款 × 4 字段远低于此，狼人杀为联机桌游不写成绩；超限时拆列为游戏独立列）。
