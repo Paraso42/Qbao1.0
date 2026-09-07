@@ -120,3 +120,47 @@ node scripts/publish-installer.js add --dir <stage> --channel beta [--prune]
 ```
 - 测试者订阅方式：desktop/config.local.json 或用户设置写入 `updateChannel: beta`。
 - 测试版不推 tag、不发 CHANGELOG、不进发布记录（仅记录测试结论）。
+
+
+## 8. 手机端发布（Android / iOS · v3.38 起）
+
+> 与桌面端共用同一份 `downloads/manifest.json`（schemaVersion 2 起含 `platforms{android,ios}`）。
+> 入库工具：**scripts/publish-mobile.js**（零依赖；add/retract/ls/verify，纪律与桌面端一致：
+> 仅 stable 语义——拒绝 prerelease/required；重复需 --force；清单引用的文件必须真实存在；写入前滚动备份 manifest.json.bak）。
+
+### 8.1 Android：构建
+```bash
+# 壳工程在 mobile/（Capacitor 6）：加载现网主站，包名 com.qbao.app，应用名 Qbao
+cd mobile/android && gradlew.bat assembleRelease          # Windows
+# 或 ./gradlew assembleRelease                              # macOS/Linux
+# 产物：mobile/android/app/build/outputs/apk/release/app-release.apk（release 签名，keystore 见 mobile/README.md）
+# 版本号：android/app/build.gradle → versionCode / versionName（与清单版本一致，如 1.0.0）
+```
+
+### 8.2 入库
+```bash
+mkdir -p /tmp/mstage && cp app-release.apk /tmp/mstage/Qbao-Android-1.0.0.apk
+node scripts/publish-mobile.js add --platform android --dir /tmp/mstage --notes "手机端首发" [--root ./downloads]
+node scripts/publish-mobile.js ls
+```
+
+### 8.3 iOS
+- 需 **macOS + Xcode + Apple Developer 账号**签名出包（TestFlight 内测 / 企业签名分发）。
+- 产物命名 `Qbao-iOS-X.Y.Z.ipa` 后执行 `publish-mobile.js add --platform ios`；未发布前，
+  下载中心 iOS 卡片与 /dl?platform=ios 自动显示「尚未发布」引导（Safari 添加到主屏幕）。
+
+### 8.4 公网验证（必须）
+```bash
+curl -s "https://<host>/api/v1/apps/manifest?platform=android"          # 含新版本
+curl -sI "https://<host>/api/v1/apps/download?platform=android&file=Qbao-Android-1.0.0.apk"   # 200
+curl -s "https://<host>/dl?platform=android"                             # 落地页 Android 视图
+```
+
+### 8.5 撤回/回滚
+```bash
+node scripts/publish-mobile.js retract --platform android --version 1.0.0 --reason "原因"   # 下载端点 410
+# 误操作：手动编辑 manifest.json 移除 retracted 标记（工具不提供 unretract）
+```
+
+> 分发入口：网页端设置页「桌面端」已升级为「**下载中心**」（Windows/Android/iOS 三端卡片，
+> 按访问设备 UA 自动高亮「本机」）；落地页 /dl 同构（?platform=android|ios，UA 自动跳转）。

@@ -221,22 +221,30 @@ module.exports = function desktopRoutes(app) {
     }
   });
 
-  // —— 公开下载落地页（中国大陆镜像站点；无框架、无用户数据）——
+  // —— 公开下载落地页（多端：Windows / Android / iOS；UA 自动推荐设备；无框架、无用户数据）——
   app.get('/dl', (req, res) => {
-    const want = String(req.query.channel || 'stable');
-    const channel = CHANNELS.includes(want) ? want : 'stable';
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Referrer-Policy', 'no-referrer');
     res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'");
+    const wantPlat = String(req.query.platform || '').toLowerCase();
+    const ua = String(req.headers['user-agent'] || '');
+    let platform = 'windows';
+    if (['windows', 'android', 'ios'].includes(wantPlat)) platform = wantPlat;
+    else if (/android/i.test(ua)) platform = 'android';
+    else if (/iphone|ipad|ipod/i.test(ua)) platform = 'ios';
     const { manifest } = tryGetManifest();
-    if (!manifest) {
-      return res.type('html').send(landingPageHtml(channel, [], null, false));
+    if (platform === 'windows') {
+      const want = String(req.query.channel || 'stable');
+      const channel = CHANNELS.includes(want) ? want : 'stable';
+      const hasBeta = !!(manifest && manifest.channels && manifest.channels.beta && manifest.channels.beta.releases.length > 0);
+      const list = manifest ? releasesOf(channel) : null;
+      return res.type('html').send(dlPageWindows(channel, list || [], manifest ? latestRequired(channel) : null, hasBeta));
     }
-    const hasBeta = !!(manifest.channels && manifest.channels.beta && manifest.channels.beta.releases.length > 0);
-    res.type('html').send(landingPageHtml(channel, releasesOf(channel) || [], latestRequired(channel), hasBeta));
+    const pdata = (manifest && manifest.platforms && manifest.platforms[platform]) ? manifest.platforms[platform].releases : [];
+    return res.type('html').send(mobileDlPage(platform, pdata || []));
   });
 
-  // —— 短链：/download → 最新安装包 ——
+  // —— 短链：/download → 最新桌面安装包 ——
   app.get('/download', (req, res) => {
     res.redirect(302, '/api/v1/desktop/download');
   });
@@ -244,99 +252,50 @@ module.exports = function desktopRoutes(app) {
 
 // ================= 落地页渲染（纯拼接，不经模板引擎） =================
 
-function landingPageHtml(channel, releases, required, hasBeta) {
-  const top = releases.find((r) => !r.retracted) || releases[0] || null;
+function dlTabsHtml(current) {
+  const defs = [
+    { id: 'windows', label: 'Windows 桌面版', href: '/dl' },
+    { id: 'android', label: 'Android', href: '/dl?platform=android' },
+    { id: 'ios', label: 'iOS', href: '/dl?platform=ios' },
+  ];
+  return '<div class="plat-tabs">' + defs.map(function (d) {
+    const act = d.id === current ? ' active' : '';
+    return '<a class="plat-tab' + act + '" href="' + d.href + '">' + d.label + '</a>';
+  }).join('') + '</div>';
+}
+
+// —— Windows 桌面版页（原结构保留；顶部加多端页签；beta 由 query 切换） ——
+function dlPageWindows(channel, releases, required, hasBeta) {
   const isBeta = channel === 'beta';
-  const rows = releases.map((r, i) => releaseRow(r, i === 0 && !r.retracted)).join('\n');
-  const hero = top
-    ? '<div class="hero">'
-        + '<div class="hero-ver">Qbao 桌面版 <b>' + esc(top.version) + '</b>'
-        + (isBeta ? ' <span class="badge badge-beta">测试版</span>' : ' <span class="badge badge-stable">稳定版</span>')
-        + '</div>'
-        + '<div class="hero-meta">' + formatBytes(top.sizeBytes) + ' · 更新于 ' + formatDate(top.releaseDate) + ' · Windows 10/11 x64</div>'
-        + '<a class="btn-download" href="/api/v1/desktop/download?file=' + encodeURIComponent(top.fileName) + '">立即下载</a>'
-        + '<div class="hero-sha">SHA256：<code class="sha">' + esc(top.sha256) + '</code>'
-        + ' <button class="btn-copy" data-copy="' + esc(top.sha256) + '" onclick="copySha(this)">复制</button></div>'
-        + '</div>'
-    : '<div class="hero"><div class="hero-ver">桌面版安装包暂未发布</div></div>';
-  const betaLink = hasBeta
-    ? '<p class="channel-line">'
-        + (isBeta
-            ? '当前展示测试版（beta）渠道。<a href="/dl">返回稳定版下载</a>'
-            : '如需体验最新测试功能，可查看 <a href="/dl?channel=beta">测试版渠道</a>（仅供测试，使用风险自负）')
-        + '</p>'
-    : '';
+  const top = releases.find(function (r) { return !r.retracted; }) || releases[0] || null;
+  const rows = releases.map(function (r, i) { return winReleaseRow(r, i === 0 && !r.retracted); }).join('\n');
   const betaBanner = isBeta
     ? '<div class="warn">测试版（beta）仅用于提前验证新功能，可能存在缺陷，不提供强制更新保障。正式使用请安装稳定版。</div>'
     : '';
   const reqNote = required
     ? '<div class="note">提示：低于 <b>' + esc(required) + '</b> 的旧版本已与当前服务器不兼容（标记「已停止服务」），请升级后使用。</div>'
     : '';
-  return '<!DOCTYPE html>'
-    + '<html lang="zh-CN"><head><meta charset="utf-8">'
-    + '<meta name="viewport" content="width=device-width, initial-scale=1">'
-    + '<title>Qbao 桌面版下载 - 中国大陆镜像站</title>'
-    + '<style>'
-    + 'body{margin:0;font-family:"Microsoft YaHei",system-ui,sans-serif;background:#f5f7fb;color:#24292f}'
-    + '.wrap{max-width:860px;margin:0 auto;padding:28px 20px 48px}'
-    + 'h1{font-size:22px;margin:0 0 4px}'
-    + '.sub{color:#57606a;margin:0 0 22px;font-size:13px}'
-    + '.card{background:#fff;border:1px solid #e3e7ee;border-radius:10px;padding:20px;margin-bottom:18px}'
-    + '.hero{text-align:center;padding:26px 12px}'
-    + '.hero-ver{font-size:18px;margin-bottom:8px}'
-    + '.hero-meta{color:#57606a;font-size:13px;margin-bottom:16px}'
-    + '.btn-download{display:inline-block;background:#1f6feb;color:#fff;font-size:16px;padding:11px 34px;border-radius:8px;text-decoration:none;font-weight:600}'
-    + '.btn-download:hover{background:#1960d3}'
-    + '.hero-sha{margin-top:14px;font-size:12px;color:#57606a;word-break:break-all}'
-    + '.sha{background:#f0f2f5;padding:2px 6px;border-radius:4px;font-size:11px}'
-    + '.btn-copy{margin-left:6px;border:1px solid #c9cfd8;background:#fff;border-radius:5px;font-size:12px;padding:3px 10px;cursor:pointer}'
-    + 'table{width:100%;border-collapse:collapse;font-size:13px}'
-    + 'th{text-align:left;color:#57606a;font-weight:600;border-bottom:2px solid #e3e7ee;padding:8px 6px}'
-    + 'td{border-bottom:1px solid #edf0f4;padding:9px 6px;vertical-align:top}'
-    + '.badge{display:inline-block;font-size:11px;padding:1px 8px;border-radius:20px;margin-left:6px}'
-    + '.badge-stable{background:#dafbe1;color:#1a7f37}'
-    + '.badge-beta{background:#fff8c5;color:#9a6700}'
-    + '.badge-gone{background:#f6f8fa;color:#57606a}'
-    + '.badge-old{background:#ddf4ff;color:#0969da}'
-    + '.badge-stop{background:#ffebe9;color:#cf222e}'
-    + '.dl-btn{display:inline-block;background:#1f6feb;color:#fff;font-size:12px;padding:4px 14px;border-radius:5px;text-decoration:none}'
-    + '.dl-btn.disabled{background:#c9cfd8;cursor:not-allowed;pointer-events:none}'
-    + '.row-sha{font-size:11px;color:#57606a;word-break:break-all;margin-top:4px}'
-    + '.warn{background:#fff8c5;border:1px solid #eac54f;color:#7d4e00;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:18px}'
-    + '.note{background:#ddf4ff;border:1px solid #54aeff66;color:#0a4c7e;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:18px}'
-    + '.channel-line{font-size:13px;color:#57606a;margin:0 0 14px}'
-    + 'h2{font-size:16px;margin:0 0 12px}'
-    + 'ol{font-size:13px;color:#24292f;line-height:1.9;margin:0;padding-left:22px}'
-    + 'code{background:#f0f2f5;padding:1px 5px;border-radius:4px;font-size:12px}'
-    + '.foot{color:#8c959f;font-size:12px;text-align:center;margin-top:26px}'
-    + 'a{color:#1f6feb}'
-    // v3.36 手机竖屏：单列卡片化（按行转卡片，td data-label 前缀），按钮 44px 触控
-    + '@media (max-width:640px){'
-    + '.wrap{padding:20px 14px 40px}'
-    + '.card{padding:16px}'
-    + '.hero{padding:20px 8px}'
-    + '.btn-download{display:block;width:100%;box-sizing:border-box;padding:14px 0;text-align:center;font-size:16px}'
-    + 'table,thead,tbody,tr,th,td{display:block}'
-    + 'thead{position:absolute;left:-9999px;top:auto}'
-    + 'tr{background:#fff;border:1px solid #e3e7ee;border-radius:10px;margin-bottom:12px;padding:10px 12px;box-sizing:border-box}'
-    + 'td{border:none;padding:6px 0}'
-    + 'td::before{content:attr(data-label);display:inline-block;min-width:64px;color:#57606a;font-weight:600;font-size:12px;vertical-align:top}'
-    + '.dl-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 16px;box-sizing:border-box}'
-    + '.btn-copy{padding:8px 14px;min-height:38px}'
-    + '}'
-    + '.btn-download,.dl-btn,.btn-copy{touch-action:manipulation;-webkit-tap-highlight-color:transparent}'
-    + '</style></head><body><div class="wrap">'
-    + '<h1>Qbao 桌面版下载</h1>'
-    + '<p class="sub">由本站服务器直接分发（中国大陆镜像），不依赖 GitHub。与网页版账号数据云端同步。</p>'
-    + betaBanner + reqNote
-    + '<div class="card">' + hero + channelLine(channel, hasBeta) + '</div>'
+  const hero = top
+    ? '<div class="hero"><div class="hero-ver">Qbao 桌面版 <b>' + esc(top.version) + '</b>'
+        + (isBeta ? ' <span class="badge badge-beta">测试版</span>' : ' <span class="badge badge-stable">稳定版</span>')
+        + '</div><div class="hero-meta">' + formatBytes(top.sizeBytes) + ' · 更新于 ' + formatDate(top.releaseDate) + ' · Windows 10/11 x64</div>'
+        + '<a class="btn-download" href="/api/v1/desktop/download?file=' + encodeURIComponent(top.fileName) + '">立即下载</a>'
+        + '<div class="hero-sha">SHA256：<code class="sha">' + esc(top.sha256) + '</code>'
+        + ' <button class="btn-copy" data-copy="' + esc(top.sha256) + '" onclick="copySha(this)">复制</button></div></div>'
+    : '<div class="hero"><div class="hero-ver">桌面版安装包暂未发布</div></div>';
+  const chLine = hasBeta
+    ? (isBeta
+        ? '<p class="channel-line">当前展示测试版（beta）渠道。<a href="/dl">返回稳定版下载</a></p>'
+        : '<p class="channel-line">如需体验最新测试功能，可查看 <a href="/dl?channel=beta">测试版渠道</a>（仅供测试，使用风险自负）</p>')
+    : '';
+  const body = betaBanner + reqNote
+    + '<div class="card">' + hero + chLine + '</div>'
     + '<div class="card"><h2>历史版本（均支持覆盖安装，旧数据保留）</h2>'
     + '<table><tr><th>版本</th><th>状态</th><th>大小</th><th>更新日期</th><th>操作</th></tr>' + rows + '</table>'
-    + '<p class="sub" style="margin-top:10px">覆盖安装（降级/重装）不会影响您的数据：账号数据云端同步，本地配置保留。</p>'
-    + '</div>'
+    + '<p class="sub" style="margin-top:10px">覆盖安装（降级/重装）不会影响您的数据：账号数据云端同步，本地配置保留。</p>' + '</div>'
     + '<div class="card"><h2>校验安装包完整性</h2>'
     + '<ol>'
-    + '<li>下载完成后，在安装包所在目录打开 PowerShell，执行：<br><code>Get-FileHash .\Qbao-Setup-*.exe -Algorithm SHA256</code></li>'
+    + '<li>下载完成后，在安装包所在目录打开 PowerShell，执行：<br><code>Get-FileHash .\\Qbao-Setup-*.exe -Algorithm SHA256</code></li>'
     + '<li>将输出值与上方对应版本的 SHA256 逐一对比，一致即完整可信（本站 HTTPS 传输 + 双重校验）。</li>'
     + '</ol></div>'
     + '<div class="card"><h2>安装与更新说明</h2><ol>'
@@ -344,7 +303,103 @@ function landingPageHtml(channel, releases, required, hasBeta) {
     + '<li>新版本发布后，自动更新通道只提示「新版本可用」，是否更新由你决定（强制更新仅发生在服务器不再兼容旧版等必要场景并会明确提示）；</li>'
     + '<li>如某个版本出现问题，可随时回到本页下载任意旧版覆盖安装；发现问题也欢迎通过 Qbao 内的反馈入口告知管理员。</li>'
     + '</ol></div>'
-    + '<p class="foot">Qbao · 华东师范大学 · 本页由服务器动态渲染，与网页端「设置 → 桌面端」信息同源</p>'
+    + '<div class="card"><h2>其他平台</h2><ol>'
+    + '<li><a href="/dl?platform=android">Android 版下载</a>（APK，本机直装，Android 5.1+）</li>'
+    + '<li><a href="/dl?platform=ios">iOS 版下载</a>（.ipa 待 macOS 签名发布；iPhone/iPad 可先用 Safari「添加到主屏幕」）</li>'
+    + '</ol></div>';
+  return dlChrome('Qbao 桌面版下载', '由本站服务器直接分发（中国大陆镜像），不依赖 GitHub。与网页版账号数据云端同步。', 'windows', body);
+}
+
+function winReleaseRow(r, isTop) {
+  const downloadParam = 'file=' + encodeURIComponent(r.fileName);
+  const statusBadge = r.retracted
+    ? '<span class="badge badge-gone">已撤回</span>'
+    : isTop
+      ? (r.version.indexOf('-') !== -1 ? '<span class="badge badge-beta">最新测试版</span>' : '<span class="badge badge-stable">当前最新</span>')
+      : r.stopped
+        ? '<span class="badge badge-stop">已停止服务</span>'
+        : '<span class="badge badge-old">旧版</span>';
+  const action = r.retracted
+    ? '<span style="color:#8c959f;font-size:12px">已下架</span>'
+    : '<a class="dl-btn' + (r.stopped ? ' disabled' : '') + '" href="/api/v1/desktop/download?' + downloadParam + '">下载</a>';
+  const retractNote = r.retracted ? '<div class="row-sha">撤回原因：' + esc(r.retracted.reason || '') + '</div>' : '';
+  const notes = (r.releaseNotes && r.releaseNotes.length) ? '<div class="row-sha">' + r.releaseNotes.map(esc).join('；') + '</div>' : '';
+  return '<tr>'
+    + '<td data-label="版本"><b>' + esc(r.version) + '</b>' + statusBadge + retractNote + '</td>'
+    + '<td data-label="状态">' + (r.stopped ? '与当前服务器不兼容' : '可用') + '</td>'
+    + '<td data-label="大小">' + formatBytes(r.sizeBytes) + '</td>'
+    + '<td data-label="更新日期">' + formatDate(r.releaseDate) + '</td>'
+    + '<td data-label="操作">' + action
+    + '<div class="row-sha">SHA256<br><code class="sha">' + esc(r.sha256) + '</code>'
+    + ' <button class="btn-copy" data-copy="' + esc(r.sha256) + '" onclick="copySha(this)">复制</button></div>'
+    + notes + '</td>'
+    + '</tr>';
+}
+const DL_CSS = [
+  'body{margin:0;font-family:"Microsoft YaHei",system-ui,sans-serif;background:#f5f7fb;color:#24292f}',
+  '.wrap{max-width:860px;margin:0 auto;padding:28px 20px 48px}',
+  'h1{font-size:22px;margin:0 0 4px}',
+  '.sub{color:#57606a;margin:0 0 22px;font-size:13px}',
+  '.card{background:#fff;border:1px solid #e3e7ee;border-radius:10px;padding:20px;margin-bottom:18px}',
+  '.hero{text-align:center;padding:26px 12px}',
+  '.hero-ver{font-size:18px;margin-bottom:8px}',
+  '.hero-meta{color:#57606a;font-size:13px;margin-bottom:16px}',
+  '.btn-download{display:inline-block;background:#1f6feb;color:#fff;font-size:16px;padding:11px 34px;border-radius:8px;text-decoration:none;font-weight:600}',
+  '.btn-download:hover{background:#1960d3}',
+  '.hero-sha{margin-top:14px;font-size:12px;color:#57606a;word-break:break-all}',
+  '.sha{background:#f0f2f5;padding:2px 6px;border-radius:4px;font-size:11px}',
+  '.btn-copy{margin-left:6px;border:1px solid #c9cfd8;background:#fff;border-radius:5px;font-size:12px;padding:3px 10px;cursor:pointer}',
+  'table{width:100%;border-collapse:collapse;font-size:13px}',
+  'th{text-align:left;color:#57606a;font-weight:600;border-bottom:2px solid #e3e7ee;padding:8px 6px}',
+  'td{border-bottom:1px solid #edf0f4;padding:9px 6px;vertical-align:top}',
+  '.badge{display:inline-block;font-size:11px;padding:1px 8px;border-radius:20px;margin-left:6px}',
+  '.badge-stable{background:#dafbe1;color:#1a7f37}',
+  '.badge-beta{background:#fff8c5;color:#9a6700}',
+  '.badge-gone{background:#f6f8fa;color:#57606a}',
+  '.badge-old{background:#ddf4ff;color:#0969da}',
+  '.badge-stop{background:#ffebe9;color:#cf222e}',
+  '.dl-btn{display:inline-block;background:#1f6feb;color:#fff;font-size:12px;padding:4px 14px;border-radius:5px;text-decoration:none}',
+  '.dl-btn.disabled{background:#c9cfd8;cursor:not-allowed;pointer-events:none}',
+  '.row-sha{font-size:11px;color:#57606a;word-break:break-all;margin-top:4px}',
+  '.warn{background:#fff8c5;border:1px solid #eac54f;color:#7d4e00;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:18px}',
+  '.note{background:#ddf4ff;border:1px solid #54aeff66;color:#0a4c7e;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:18px}',
+  '.empty-note{background:#ddf4ff;border:1px solid #54aeff66;color:#0a4c7e;border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.9;margin-bottom:18px}',
+  '.channel-line{font-size:13px;color:#57606a;margin:0 0 14px}',
+  'h2{font-size:16px;margin:0 0 12px}',
+  'ol{font-size:13px;color:#24292f;line-height:1.9;margin:0;padding-left:22px}',
+  'code{background:#f0f2f5;padding:1px 5px;border-radius:4px;font-size:12px}',
+  '.foot{color:#8c959f;font-size:12px;text-align:center;margin-top:26px}',
+  'a{color:#1f6feb}',
+  '.plat-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}',
+  '.plat-tab{display:inline-block;padding:8px 18px;border-radius:20px;border:1px solid #c9cfd8;background:#fff;color:#24292f;font-size:14px;text-decoration:none}',
+  '.plat-tab.active{background:#1f6feb;border-color:#1f6feb;color:#fff;font-weight:600}',
+  '@media (max-width:640px){',
+  '.wrap{padding:20px 14px 40px}',
+  '.card{padding:16px}',
+  '.hero{padding:20px 8px}',
+  '.btn-download{display:block;width:100%;box-sizing:border-box;padding:14px 0;text-align:center;font-size:16px}',
+  'table,thead,tbody,tr,th,td{display:block}',
+  'thead{position:absolute;left:-9999px;top:auto}',
+  'tr{background:#fff;border:1px solid #e3e7ee;border-radius:10px;margin-bottom:12px;padding:10px 12px;box-sizing:border-box}',
+  'td{border:none;padding:6px 0}',
+  'td::before{content:attr(data-label);display:inline-block;min-width:64px;color:#57606a;font-weight:600;font-size:12px;vertical-align:top}',
+  '.dl-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 16px;box-sizing:border-box}',
+  '.btn-copy{padding:8px 14px;min-height:38px}',
+  '}',
+  '.btn-download,.dl-btn,.btn-copy,.plat-tab{touch-action:manipulation;-webkit-tap-highlight-color:transparent}'
+].join('\n');
+
+function dlChrome(title, sub, current, body) {
+  return '<!DOCTYPE html>'
+    + '<html lang="zh-CN"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+    + '<title>' + esc(title) + '</title>'
+    + '<style>' + DL_CSS + '</style></head><body><div class="wrap">'
+    + dlTabsHtml(current)
+    + '<h1>' + esc(title) + '</h1>'
+    + '<p class="sub">' + sub + '</p>'
+    + body
+    + '<p class="foot">Qbao · 华东师范大学 · 本页由服务器动态渲染，与网页端「设置 → 下载中心」信息同源</p>'
     + '<script>'
     + 'function copySha(btn){'
     + '  var v=btn.getAttribute("data-copy")||"";'
@@ -359,38 +414,59 @@ function landingPageHtml(channel, releases, required, hasBeta) {
     + '  document.body.removeChild(ta);'
     + '}'
     + '</script>'
-    + '</body></html>';
+    + '</div></body></html>';
 }
 
-function channelLine(channel, hasBeta) {
-  if (!hasBeta) return '';
-  if (channel === 'beta') {
-    return '<p class="channel-line">当前展示测试版（beta）渠道。<a href="/dl">返回稳定版下载</a></p>';
-  }
-  return '<p class="channel-line">如需提前体验新功能，可查看 <a href="/dl?channel=beta">测试版渠道</a>（仅供测试，不提供强制更新保障）。</p>';
+// —— 手机端页（android / ios，与桌面端同源 manifest 的 platforms 段） ——
+function mobileDlPage(platform, releases) {
+  const isIos = platform === 'ios';
+  const label = isIos ? 'iOS' : 'Android';
+  const top = releases.find(function (r) { return !r.retracted; }) || releases[0] || null;
+  const dlPath = '/api/v1/apps/download?platform=' + platform + '&file=';
+  const rows = releases.map(function (r, i) { return mobileReleaseRow(dlPath, r, i === 0 && !r.retracted); }).join('\n');
+  const emptyNote = top ? '' : isIos
+    ? '<div class="empty-note"><b>iOS 安装包尚未发布。</b>iOS 包需在 macOS 上使用 Xcode + Apple Developer 账号签名后分发（TestFlight / 企业签名）。发布就绪后本页会直接提供下载与 SHA256。当前 iPhone / iPad 用户可先用 Safari 打开本站，通过「分享 → 添加到主屏幕」获得全屏 App 入口；账号数据与网页版 / 桌面版 / Android 版云端同步。</div>'
+    : '<div class="empty-note">Android 安装包尚未发布，请稍后再来。发布后本页将直接提供 APK 下载与 SHA256 校验值。</div>';
+  const hero = top
+    ? '<div class="hero"><div class="hero-ver">Qbao ' + label + ' 版 <b>' + esc(top.version) + '</b> <span class="badge badge-stable">稳定版</span></div>'
+        + '<div class="hero-meta">' + formatBytes(top.sizeBytes) + ' · 更新于 ' + formatDate(top.releaseDate) + (isIos ? '' : ' · Android 5.1+') + '</div>'
+        + '<a class="btn-download" href="' + dlPath + encodeURIComponent(top.fileName) + '">立即下载</a>'
+        + '<div class="hero-sha">SHA256：<code class="sha">' + esc(top.sha256) + '</code>'
+        + ' <button class="btn-copy" data-copy="' + esc(top.sha256) + '" onclick="copySha(this)">复制</button></div></div>'
+    : '<div class="hero"><div class="hero-ver">' + label + ' 版安装包暂未发布</div></div>';
+  const history = top || releases.length
+    ? '<div class="card"><h2>历史版本（覆盖安装保留数据）</h2>'
+        + '<table><tr><th>版本</th><th>状态</th><th>大小</th><th>更新日期</th><th>操作</th></tr>' + rows + '</table></div>'
+    : '';
+  const guide = isIos
+    ? '<div class="card"><h2>iOS 安装说明（发布后）</h2><ol>'
+        + '<li>点击「立即下载」获取 .ipa（需已在 Apple 侧完成签名）；</li>'
+        + '<li>未上架 App Store 前，需通过 TestFlight 或企业证书信任安装；</li>'
+        + '<li>账号数据与网页版 / 桌面版 / Android 版云端同步。</li></ol></div>'
+    : '<div class="card"><h2>Android 安装说明</h2><ol>'
+        + '<li>手机浏览器打开本页点击「立即下载」，下载 .apk（Android 5.1 及以上）；</li>'
+        + '<li>安装时如提示「未知来源」，请允许本次安装；</li>'
+        + '<li>覆盖安装不影响数据；账号数据与网页版 / 桌面版 / iOS 版云端同步。</li></ol></div>';
+  const body = emptyNote + hero + history + guide
+    + '<div class="card"><h2>其他平台</h2><ol>'
+    + '<li><a href="/dl">Windows 桌面版下载</a>（独立窗口 + 自动更新）</li>'
+    + (isIos ? '<li><a href="/dl?platform=android">Android 版下载</a>（APK，本机直装）</li>' : '<li><a href="/dl?platform=ios">iOS 版下载</a>（.ipa 待 macOS 签名发布；iPhone/iPad 可先用 Safari「添加到主屏幕」）</li>')
+    + '</ol></div>';
+  return dlChrome('Qbao ' + label + ' 版下载', '由本站服务器直接分发（中国大陆镜像）。与网页版账号数据云端同步，多端一致。', platform, body);
 }
 
-function releaseRow(r, isTop) {
-  const downloadParam = 'file=' + encodeURIComponent(r.fileName);
+function mobileReleaseRow(dlPath, r, isTop) {
   const statusBadge = r.retracted
     ? '<span class="badge badge-gone">已撤回</span>'
-    : isTop
-      ? (r.version.indexOf('-') !== -1 ? '<span class="badge badge-beta">最新测试版</span>' : '<span class="badge badge-stable">当前最新</span>')
-      : r.stopped
-        ? '<span class="badge badge-stop">已停止服务</span>'
-        : '<span class="badge badge-old">旧版</span>';
+    : isTop ? '<span class="badge badge-stable">当前最新</span>' : '<span class="badge badge-old">旧版</span>';
   const action = r.retracted
     ? '<span style="color:#8c959f;font-size:12px">已下架</span>'
-    : '<a class="dl-btn' + (r.stopped ? ' disabled' : '') + '" href="/api/v1/desktop/download?' + downloadParam + '">下载</a>';
-  const retractNote = r.retracted
-    ? '<div class="row-sha">撤回原因：' + esc(r.retracted.reason || '') + '</div>'
-    : '';
-  const notes = r.releaseNotes && r.releaseNotes.length
-    ? '<div class="row-sha">' + r.releaseNotes.map(esc).join('；') + '</div>'
-    : '';
+    : '<a class="dl-btn" href="' + dlPath + encodeURIComponent(r.fileName) + '">下载</a>';
+  const retractNote = r.retracted ? '<div class="row-sha">撤回原因：' + esc(r.retracted.reason || '') + '</div>' : '';
+  const notes = (r.releaseNotes && r.releaseNotes.length) ? '<div class="row-sha">' + r.releaseNotes.map(esc).join('；') + '</div>' : '';
   return '<tr>'
     + '<td data-label="版本"><b>' + esc(r.version) + '</b>' + statusBadge + retractNote + '</td>'
-    + '<td data-label="状态">' + (r.stopped ? '与当前服务器不兼容' : '可用') + '</td>'
+    + '<td data-label="状态">' + (r.retracted ? '已下架' : '可用') + '</td>'
     + '<td data-label="大小">' + formatBytes(r.sizeBytes) + '</td>'
     + '<td data-label="更新日期">' + formatDate(r.releaseDate) + '</td>'
     + '<td data-label="操作">' + action

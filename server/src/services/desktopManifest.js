@@ -34,6 +34,10 @@ const path = require('path');
 
 const CHANNELS = ['stable', 'beta'];
 
+// 手机端平台与文件名（Qbao-Android-<v>.apk / Qbao-iOS-<v>.ipa；暂只支持 stable 纪律）
+const PLATFORMS = ['android', 'ios'];
+const MOBILE_FILE_RE = /^Qbao-(Android|iOS)-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\.(apk|ipa)$/i;
+
 // 安装包文件名白名单（含 prerelease 后缀，如 3.35.0-beta.1）
 const NAME_RE = /^Qbao-Setup-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\.exe$/i;
 // semver（含可选的 prerelease）
@@ -123,7 +127,8 @@ function readManifestFile() {
 
 function validateManifest(m) {
   if (!m || typeof m !== 'object') throw new Error('manifest 不是对象');
-  if (m.schemaVersion !== 1) throw new Error('不支持的 manifest schemaVersion: ' + m.schemaVersion);
+  if (m.schemaVersion !== 1 && m.schemaVersion !== 2) throw new Error('不支持的 manifest schemaVersion: ' + m.schemaVersion);
+  if (m.schemaVersion === 2 && (!m.platforms || typeof m.platforms !== 'object')) throw new Error('manifest v2 缺少 platforms 段');
   if (!m.channels || typeof m.channels !== 'object') throw new Error('manifest 缺少 channels');
   for (const ch of CHANNELS) {
     const entry = m.channels[ch];
@@ -168,6 +173,45 @@ function validateManifest(m) {
     }
     // 统一最新在前（防手写清单乱序）
     entry.releases = sortReleasesDesc(entry.releases);
+  }
+
+  // —— 手机端平台（android / ios）：stable 纪律（禁 prerelease / required），清单引用的文件必须真实存在 ——
+  if (m.schemaVersion >= 2) {
+    for (const pf of PLATFORMS) {
+      const entry = m.platforms[pf];
+      if (entry === undefined || entry === null) continue;
+      if (!Array.isArray(entry.releases)) throw new Error('平台 ' + pf + ' 缺少 releases 数组');
+      const seen = new Set();
+      const seenFiles = new Set();
+      for (const r of entry.releases) {
+        if (!r || typeof r !== 'object') throw new Error('平台 ' + pf + ' 存在非法 release 条目');
+        if (!VERSION_RE.test(r.version || '')) throw new Error('平台 ' + pf + ' 非法版本号: ' + r.version);
+        if (isPrerelease(r.version)) throw new Error('平台 ' + pf + ' 暂不支持 prerelease 版本: ' + r.version);
+        const nameMatch = String(r.fileName || '').match(MOBILE_FILE_RE);
+        if (!nameMatch) throw new Error('平台 ' + pf + ' 非法文件名: ' + r.fileName);
+        if (String(nameMatch[1]).toLowerCase() !== pf) throw new Error('平台 ' + pf + ' 文件名平台不匹配: ' + r.fileName);
+        if (seen.has(r.version)) throw new Error('平台 ' + pf + ' 重复版本: ' + r.version);
+        if (seenFiles.has(r.fileName)) throw new Error('平台 ' + pf + ' 重复文件: ' + r.fileName);
+        seen.add(r.version);
+        seenFiles.add(r.fileName);
+        if (typeof r.sizeBytes !== 'number' || r.sizeBytes <= 0) throw new Error('平台 ' + pf + ' ' + r.version + ' 非法 sizeBytes');
+        if (!SHA256_RE.test(r.sha256 || '')) throw new Error('平台 ' + pf + ' ' + r.version + ' 非法 sha256');
+        if (typeof r.releaseDate !== 'string' || !r.releaseDate) throw new Error('平台 ' + pf + ' ' + r.version + ' 缺少 releaseDate');
+        if (r.releaseNotes !== undefined && !(Array.isArray(r.releaseNotes) && r.releaseNotes.every((t) => typeof t === 'string'))) {
+          throw new Error('平台 ' + pf + ' ' + r.version + ' 非法 releaseNotes');
+        }
+        if (r.required !== undefined && r.required !== null) throw new Error('平台 ' + pf + ' 禁止 required: ' + r.version);
+        if (r.retracted !== undefined && r.retracted !== null) {
+          if (typeof r.retracted !== 'object' || typeof r.retracted.reason !== 'string') {
+            throw new Error('平台 ' + pf + ' ' + r.version + ' 非法 retracted');
+          }
+        }
+        const abs = path.join(downloadsDir(), pf, r.fileName);
+        if (!fs.existsSync(abs)) throw new Error('平台 ' + pf + ' 清单文件缺失: ' + r.fileName);
+      }
+      // 统一最新在前
+      entry.releases = sortReleasesDesc(entry.releases);
+    }
   }
 }
 
@@ -250,9 +294,35 @@ function filePathOf(channel, fileName) {
   return path.join(downloadsDir(), channel, fileName);
 }
 
+// —— 手机端平台辅助 ——
+function mobileReleasesOf(platform) {
+  const m = getManifest();
+  const entry = m.platforms && m.platforms[platform];
+  return entry && Array.isArray(entry.releases) ? entry.releases : null;
+}
+
+// 平台内最新未撤回版本
+function topOfPlatform(platform) {
+  const list = mobileReleasesOf(platform);
+  if (!list) return null;
+  return list.find((r) => !r.retracted) || null;
+}
+
+function findMobileReleaseByFile(platform, fileName) {
+  const list = mobileReleasesOf(platform);
+  if (!list) return null;
+  return list.find((r) => r.fileName === fileName) || null;
+}
+
+function mobileFilePathOf(platform, fileName) {
+  return path.join(downloadsDir(), platform, fileName);
+}
+
 module.exports = {
   CHANNELS,
+  PLATFORMS,
   NAME_RE,
+  MOBILE_FILE_RE,
   VERSION_RE,
   downloadsDir,
   compareVersions,
@@ -267,4 +337,8 @@ module.exports = {
   findReleaseByFile,
   findReleaseByVersion,
   filePathOf,
+  mobileReleasesOf,
+  topOfPlatform,
+  findMobileReleaseByFile,
+  mobileFilePathOf,
 };

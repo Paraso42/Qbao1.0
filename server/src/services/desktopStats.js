@@ -85,6 +85,35 @@ async function getStats() {
   return { perVersion, last30d };
 }
 
+// 按文件聚合（桌面端/手机端均可按 fileName 精确计数；与 getStats 的 version 口径互不影响）
+async function getStatsByFile() {
+  let dbRows = [];
+  if (dbEnabled()) {
+    try {
+      const v = await pool.query(
+        'SELECT file_name, SUM(cnt)::int AS downloads FROM desktop_download_stats GROUP BY file_name ORDER BY file_name'
+      );
+      dbRows = v.rows;
+    } catch (e) {
+      const now = Date.now();
+      if (now - lastWarnAt > 300000) {
+        lastWarnAt = now;
+        console.warn('[desktopStats] DB 读取失败，仅返回内存兜底统计:', e.message);
+      }
+    }
+  }
+  const fileMap = new Map(dbRows.map((r) => [r.file_name, Number(r.downloads)]));
+  for (const [key, cnt] of pending) {
+    const parts = key.split('|');
+    const fileName = parts[1];
+    fileMap.set(fileName, (fileMap.get(fileName) || 0) + cnt);
+  }
+  const perFile = [];
+  for (const [fileName, downloads] of fileMap) perFile.push({ fileName, downloads });
+  perFile.sort((a, b) => (a.fileName < b.fileName ? -1 : 1));
+  return perFile;
+}
+
 // 测试专用
 function _resetForTests() {
   pending.clear();
@@ -93,6 +122,7 @@ function _resetForTests() {
 module.exports = {
   recordDownload,
   getStats,
+  getStatsByFile,
   _resetForTests,
   _pending: pending,
 };

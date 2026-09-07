@@ -161,4 +161,102 @@ describe('desktopManifest 服务（清单校验与解析）', () => {
     expect(hit.release.version).toBe('3.35.0-beta.1');
     expect(dm.findReleaseByFile('Qbao-Setup-9.9.9.exe')).toBeNull();
   });
+
+  // —— schemaVersion 2：手机端平台（android/ios） ——
+  function mobileRelease(platform, version, extra) {
+    const pfx = platform === 'ios' ? 'Qbao-iOS-' : 'Qbao-Android-';
+    const ext = platform === 'ios' ? '.ipa' : '.apk';
+    return Object.assign({
+      version,
+      fileName: pfx + version + ext,
+      sizeBytes: 2048,
+      sha256: crypto.createHash('sha256').update('m-' + platform + '-' + version).digest('hex'),
+      releaseDate: '2026-09-06T00:00:00.000Z',
+      releaseNotes: ['手机端发布'],
+      retracted: null,
+    }, extra || {});
+  }
+
+  function installV2(platforms) {
+    const manifest = {
+      schemaVersion: 2,
+      updatedAt: 'x',
+      channels: { stable: { releases: [] }, beta: { releases: [] } },
+      platforms: {},
+    };
+    for (const [pf, list] of Object.entries(platforms)) {
+      const pfDir = path.join(dir, pf);
+      fs.mkdirSync(pfDir, { recursive: true });
+      for (const r of list) fs.writeFileSync(path.join(pfDir, r.fileName), Buffer.alloc(8, 1));
+      manifest.platforms[pf] = { releases: list };
+    }
+    fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest));
+  }
+
+  it('v2 合法平台清单加载：排序、topOfPlatform、findMobileReleaseByFile', () => {
+    installV2({
+      android: [mobileRelease('android', '1.0.0'), mobileRelease('android', '0.9.0', { retracted: { reason: '首包问题' } })],
+      ios: [mobileRelease('ios', '0.1.0')],
+    });
+    const m = dm.getManifest();
+    expect(m.channels.stable.releases).toEqual([]); // 桌面端为空渠道不受影响
+    expect(m.platforms.android.releases.map((r) => r.version)).toEqual(['1.0.0', '0.9.0']);
+    expect(dm.topOfPlatform('android').version).toBe('1.0.0');
+    expect(dm.mobileReleasesOf('foo')).toBeNull();
+    expect(dm.findMobileReleaseByFile('android', 'Qbao-Android-0.9.0.apk').version).toBe('0.9.0');
+    expect(dm.findMobileReleaseByFile('ios', 'Qbao-Android-1.0.0.apk')).toBeNull();
+    expect(dm.mobileFilePathOf('android', 'Qbao-Android-1.0.0.apk')).toBe(path.join(dir, 'android', 'Qbao-Android-1.0.0.apk'));
+  });
+
+  it('v2 纪律：prerelease / required / 文件缺失 / 文件名平台不匹配 / schema2 缺 platforms / 重复版本', () => {
+    // mtime 缓存粒度兜底：同目录内反复改写 manifest.json 后强制时间递增
+    const bump = () => {
+      const now = new Date();
+      fs.utimesSync(path.join(dir, 'manifest.json'), now, new Date(now.getTime() + 2000));
+    };
+    installV2({ android: [mobileRelease('android', '1.0.0-beta.1')] });
+    expect(() => dm.getManifest()).toThrow(/暂不支持 prerelease/);
+
+    installV2({ android: [mobileRelease('android', '1.0.0', { required: '0.9.0' })] });
+    bump();
+    expect(() => dm.getManifest()).toThrow(/禁止 required/);
+
+    // 清单引用 apk，但实体文件缺失（引用从未入库的版本 9.0.0）
+    fs.mkdirSync(path.join(dir, 'android'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({
+      schemaVersion: 2, updatedAt: 'x', channels: { stable: { releases: [] }, beta: { releases: [] } },
+      platforms: { android: { releases: [mobileRelease('android', '9.0.0')] } },
+    }));
+    bump();
+    expect(() => dm.getManifest()).toThrow(/清单文件缺失/);
+
+    // 文件名平台不匹配（android 平台引用 iOS 文件，即使文件存在也拒绝）
+    fs.writeFileSync(path.join(dir, 'android', 'Qbao-iOS-1.0.0.ipa'), Buffer.alloc(8));
+    fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({
+      schemaVersion: 2, updatedAt: 'x', channels: { stable: { releases: [] }, beta: { releases: [] } },
+      platforms: { android: { releases: [mobileRelease('android', '1.0.0', { fileName: 'Qbao-iOS-1.0.0.ipa' })] } },
+    }));
+    bump();
+    expect(() => dm.getManifest()).toThrow(/文件名平台不匹配/);
+
+    // schemaVersion 2 却缺 platforms 段
+    fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({
+      schemaVersion: 2, updatedAt: 'x', channels: { stable: { releases: [] }, beta: { releases: [] } },
+    }));
+    bump();
+    expect(() => dm.getManifest()).toThrow(/缺少 platforms/);
+
+    // 重复版本
+    installV2({ android: [mobileRelease('android', '1.0.0'), mobileRelease('android', '1.0.0')] });
+    bump();
+    expect(() => dm.getManifest()).toThrow(/重复版本/);
+  });
+
+  it('v1（纯桌面端）清单仍可加载；schemaVersion 1 无 platforms 不报错', () => {
+    install({ stable: [release('3.36.0')], beta: [] });
+    const m = dm.getManifest();
+    expect(m.schemaVersion).toBe(1);
+    expect(m.channels.stable.releases[0].version).toBe('3.36.0');
+    expect(m.platforms).toBeUndefined();
+  });
 });

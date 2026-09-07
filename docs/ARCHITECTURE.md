@@ -46,6 +46,7 @@ server/  Node.js + Express API（端口 3000）
 
 - **框架**：Express 4 + pg 连接池；14 个路由模块（auth/data/backup/ai/aiTasks/share/notices/users/points/quiz/files/issues/chat/desktop，v1 死代码已删，T14；路由层全部 asyncHandler + zod 校验）。
 - **桌面分发端点（v3.35+）**：desktop.routes 提供 manifest / latest / download（断点续传）/ update feed / stats 与 /dl、/download（详见 docs/DEPLOY.md §8.5 与 docs/PUBLISHING.md）；安装包由 GitHub Actions 构建并归档 Release，经 scripts/publish-installer.js 搬入自托管储藏室 downloads/，桌面端从自托管 feed 更新。
+- **手机端分发（v3.38+）**：同一份 downloads/manifest.json 升级 schemaVersion 2 增 platforms{android,ios}（Windows 渠道不变）；apps.routes 提供 /api/v1/apps/{manifest,download,stats}；/dl 落地页与网页端「设置 → 下载中心」多端卡片化（Windows/Android/iOS，UA 自动高亮本机）；入库走 scripts/publish-mobile.js（构建产物：mobile/ Capacitor 壳工程，包名 com.qbao.app）。
 - **鉴权**：JWT（30 天）+ bcrypt 密码哈希；`requireAuth` / `requireAdmin` 中间件；`express-rate-limit` 全局与登录限流。
 - **AI 层**：`providers/` 统一实现（openaiCompatible 工厂覆盖 ecnu/deepseek/openai + 独立 gemini 适配器，T14 删除死 provider），能力目录在 `providers/catalog.js`；用户自配 API Key，经请求头 `x-ai-api-key` 传入后端；**成功才计费**（T6）。
 - **数据**：核心业务数据整包存 `user_data.state_json JSONB`，`GET/PUT /api/v1/data` 全量读写；答题会话、聊天、反馈、公告、文件、分享各有独立表。

@@ -15,6 +15,10 @@ const FILE_RE = /^Qbao-Setup-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\.exe$/i;
 const VERSION_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const CHANNELS = ['stable', 'beta'];
 
+// 手机端平台与文件名（Qbao-Android-<v>.apk / Qbao-iOS-<v>.ipa）
+const PLATFORMS = ['android', 'ios'];
+const MOBILE_FILE_RE = /^Qbao-(Android|iOS)-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\.(apk|ipa)$/i;
+
 // —— semver ——
 function parseVersion(v) {
   const m = String(v).match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/);
@@ -154,7 +158,8 @@ function loadManifest(dir) {
 
 function validateManifestStructure(m) {
   if (!m || typeof m !== 'object') throw new Error('manifest 不是对象');
-  if (m.schemaVersion !== 1) throw new Error('不支持的 schemaVersion: ' + m.schemaVersion);
+  if (m.schemaVersion !== 1 && m.schemaVersion !== 2) throw new Error('不支持的 schemaVersion: ' + m.schemaVersion);
+  if (m.schemaVersion === 2 && (!m.platforms || typeof m.platforms !== 'object')) throw new Error('schemaVersion 2 缺少 platforms');
   if (!m.channels || typeof m.channels !== 'object') throw new Error('缺少 channels');
   for (const ch of CHANNELS) {
     const entry = m.channels[ch];
@@ -166,6 +171,28 @@ function validateManifestStructure(m) {
       if (ch === 'stable' && isPrerelease(r.version)) throw new Error('stable 渠道禁止 prerelease: ' + r.version);
       if (ch === 'beta' && r.required) throw new Error('beta 渠道禁止 required');
       if (ch === 'beta' && r.retracted) throw new Error('beta 渠道禁止 retracted');
+    }
+  }
+  // 手机端平台（android/ios）：stable 纪律（禁 prerelease / required）；文件存在性由发布工具负责
+  if (m.schemaVersion >= 2) {
+    for (const pf of PLATFORMS) {
+      const entry = m.platforms[pf];
+      if (entry === undefined) continue;
+      if (!Array.isArray(entry.releases)) throw new Error('平台 ' + pf + ' 缺少 releases');
+      const seen = new Set();
+      const seenFiles = new Set();
+      for (const r of entry.releases) {
+        if (!VERSION_RE.test(r.version || '')) throw new Error('平台 ' + pf + ' 非法版本: ' + r.version);
+        const nameMatch = String(r.fileName || '').match(MOBILE_FILE_RE);
+        if (!nameMatch) throw new Error('平台 ' + pf + ' 非法文件名: ' + r.fileName);
+        if (String(nameMatch[1]).toLowerCase() !== pf) throw new Error('平台 ' + pf + ' 文件名平台不匹配: ' + r.fileName);
+        if (isPrerelease(r.version)) throw new Error('平台 ' + pf + ' 暂不支持 prerelease: ' + r.version);
+        if (r.required) throw new Error('平台 ' + pf + ' 禁止 required');
+        if (seen.has(r.version)) throw new Error('平台 ' + pf + ' 重复版本: ' + r.version);
+        if (seenFiles.has(r.fileName)) throw new Error('平台 ' + pf + ' 重复文件: ' + r.fileName);
+        seen.add(r.version);
+        seenFiles.add(r.fileName);
+      }
     }
   }
 }
@@ -196,6 +223,18 @@ function findRelease(m, channel, version) {
   return entry.releases.find((r) => r.version === version) || null;
 }
 
+function platformOf(m, platform) {
+  if (!m.platforms) m.platforms = {};
+  if (!m.platforms[platform]) m.platforms[platform] = { releases: [] };
+  return m.platforms[platform];
+}
+
+function findPlatformRelease(m, platform, version) {
+  const entry = m.platforms && m.platforms[platform];
+  if (!entry) return null;
+  return entry.releases.find((r) => r.version === version) || null;
+}
+
 // 剪枝：保留最新的 keep 个；若其中可用（未撤回）版本不足 minUsable，则延伸保留。
 // 返回被删除的文件名列表（exe / blockmap）。
 function pruneChannel(m, channel, keep, minUsable) {
@@ -222,6 +261,8 @@ module.exports = {
   FILE_RE,
   VERSION_RE,
   CHANNELS,
+  MOBILE_FILE_RE,
+  PLATFORMS,
   parseVersion,
   compareVersions,
   isPrerelease,
@@ -237,4 +278,6 @@ module.exports = {
   channelOf,
   findRelease,
   pruneChannel,
+  platformOf,
+  findPlatformRelease,
 };

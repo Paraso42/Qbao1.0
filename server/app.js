@@ -64,12 +64,12 @@ function createApp() {
   require('./src/routes/notices.routes.v2')(app);
   require('./src/routes/users.routes.v2')(app);
   require('./src/routes/points.routes')(app);
-  require('./src/routes/roulette.routes')(app);
-  require('./src/routes/quiz.routes')(app);
+    require('./src/routes/quiz.routes')(app);
   require('./src/routes/files.routes.v2')(app);
   require('./src/routes/issues.routes.v2')(app);
   require('./src/routes/chat.routes.v2')(app);
   require('./src/routes/desktop.routes')(app);
+  require('./src/routes/apps.routes')(app);
   require('./src/routes/games.routes')(app);
 
   // 统一兜底：404 + 全局错误处理（必须最后注册）
