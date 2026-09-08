@@ -6,7 +6,7 @@
 
 | 文档 | 说明 |
 |------|------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | 系统架构、模块清单、技术债与重构方向追踪 |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | 系统架构事实源：公网 HTTPS 链路 / 双环境路由与隔离 / 权限安全边界 / 分发架构 / 技术债登记 |
 | [DEPLOY.md](DEPLOY.md) | 部署：nginx / systemd / PostgreSQL / 备份 / 升级 / 桌面端分发 |
 | [PUBLISHING.md](PUBLISHING.md) | 桌面端发布手册：manifest 入库、双渠道、强制更新、撤回、回滚 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 开发工作流、隐私分离规则、诊断脚本 |

@@ -1,7 +1,7 @@
 # 开发上线流程规范
 
-> 版本 v1.2 · 生效 2026-09-08 · 本文档为开发流程的**唯一事实源**（CHANGELOG 只记产品变更）。
-> 配套文档：环境与网络地图（L0/L1/L2 概念与内测入口）见 `docs/ENVIRONMENTS.md`；环境与隐私铁律见 `docs/DEVELOPMENT.md`；
+> 版本 v1.3 · 生效 2026-09-08 · 本文档为开发流程的**唯一事实源**（CHANGELOG 只记产品变更）。
+> 配套文档：环境与网络地图（L0/L1/L2 概念与内测入口）见 `docs/ENVIRONMENTS.md`；架构事实源（HTTPS 链路 / 环境路由 / 安全边界）见 `docs/ARCHITECTURE.md`；环境与隐私铁律见 `docs/DEVELOPMENT.md`；
 > 部署细节见 `docs/DEPLOY.md`（含 §4B 内测环境）；桌面端发布/事故处置见 `docs/PUBLISHING.md`；游戏测试与内测规范见 `docs/GAMES.md` 第六节。
 
 ## 1. 总则（核心节奏）
@@ -122,12 +122,12 @@ v1.1 及以前：本地测完直接部署生产，测试动作（测试账号、
 
 ## 5. DoD（部署前必须全绿）
 
-- `server`: `npx vitest run` 全绿（基线 228 用例，弹猪乐接入后）
-- `app`: `npx vitest run` 全绿（基线 203+ 用例）；**登录门禁：未登录整页登录门禁、匿名零写盘、匿名改动锁重建**
+- `server`: `npx vitest run` 全绿（基线 233 用例 / 39 文件，2026-09-08 复核）
+- `app`: `npx vitest run` 全绿（基线 250 用例 / 27 文件）；**登录门禁：未登录整页登录门禁、匿名零写盘、匿名改动锁重建**
 - **手机竖屏检查**（≤768px：360/390 两档）无横向滚动、输入控件 ≥16px、主操作按钮 ≤1 屏内可达、无「查看报告」章节入口、活动会话大键不落 localStorage
 - **科目总览数字自洽检查**（涉及看板/统计改动时）：总览与题库 tab 同数；环形图分母 = 图例合计；跳过不计正确率；科目级 = Σ章节（单测锁定）
-- `scripts`: `node --test scripts/installer-lib.test.js` 全绿
-- `desktop`: `node --check main.js preload.js updater.js updater-util.js` + `node --test desktop/test` 全绿
+- `scripts`: `node --test scripts/installer-lib.test.js` 全绿（6 例）
+- `desktop`: `node --check main.js preload.js updater.js updater-util.js` + `node --test desktop/test` 全绿（5 例）
 - `npx eslint .`（app/server）0 error
 - `app`: `npx vite build` 成功；`dist/index.html` 大小**以字节核对**；涉及 Vue 模板时 compiler-sfc 扫描无悬空绑定
 - **游戏 QA（新游戏/游戏逻辑改动时）**：宿主门禁单测（`app/src/games/qa-gate`）全绿；游戏 QA 清单见 docs/GAMES.md 第六节
@@ -161,3 +161,4 @@ v1.1 及以前：本地测完直接部署生产，测试动作（测试账号、
 - 紧急修复可压缩 ②③⑥ 的节奏，但 ⑦→⑧ 与 ⑨ 的闸门不变。
 - **视觉校验（v3.34 增补）**：需要图片类视觉判断（界面截图审阅、视觉回归、图像内容校验）时，统一交给视觉模型分析（工作方式约定，不属于产品功能）。
 - 本规范修订：更新版本号 + `local/log.md` 记录变更；修订后以此文件为准。
+- 修订记录：v1.3（2026-09-08）—— DoD 基线刷新（server 233 / app 250 / scripts 6 / desktop 5）；配套新增 docs/ARCHITECTURE.md 为架构事实源；公开文档统一占位符 {PROD_ROOT}/{BETA_ROOT}。

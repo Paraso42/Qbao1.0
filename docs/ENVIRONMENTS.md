@@ -1,8 +1,8 @@
 # Qbao 环境与网络地图（开发 / 内测 / 生产）
 
 > 面向**非网络专业读者**的环境说明书：几个网址分别是什么、给谁用、改代码先上哪、为什么有时"看不到新版本"。
-> 按隐私铁律，本文所有真实地址一律用占位符：{DOMAIN} 生产域名、{BETA_HOST} 内测域名、{ORIGIN_IP} 源站 IP、{HK_IP} 香港中转服务器 IP、{SSH_USER} 服务器用户。
-> 真实值对照表只保存在本机 gitignored 的 `local/ENV.md`（部署/发布纪律见 [DEVELOPMENT_FLOW.md](DEVELOPMENT_FLOW.md)，服务器细节见 [DEPLOY.md](DEPLOY.md)，游戏 QA 见 [GAMES.md](GAMES.md)）。
+> 按隐私铁律，本文所有真实地址一律用占位符：{DOMAIN} 生产域名、{BETA_HOST} 内测域名、{ORIGIN_IP} 源站 IP、{HK_IP} 香港中转服务器（网关）IP、{PROD_ROOT}/{BETA_ROOT} 源站两套部署根、{SSH_USER} 服务器用户。
+> 真实值对照表只保存在本机 gitignored 的 `local/ENV.md`（机制原理见 [ARCHITECTURE.md](ARCHITECTURE.md)，部署/发布纪律见 [DEVELOPMENT_FLOW.md](DEVELOPMENT_FLOW.md)，服务器细节见 [DEPLOY.md](DEPLOY.md)，游戏 QA 见 [GAMES.md](GAMES.md)）。
 
 ## 1. 一句话概括
 
@@ -22,12 +22,13 @@ Qbao 有三层"环境"，改动一律**从左到右**流动：
 |---|---|---|---|
 | 域名 | 人类可读的网址 | 门牌号 | {DOMAIN}（生产）、{BETA_HOST}（内测） |
 | DNS | 把域名翻译成服务器 IP | 电话簿 | 由 Cloudflare 托管，指向香港中转服务器 |
-| Cloudflare | 全球 CDN + DNS | 快递总站 | 加速静态资源、DNS 管理、对外 HTTPS 入口 |
-| 反向代理（Caddy） | 收下 HTTPS 请求并转发到源站 | 前台柜员 | 香港中转服务器上的 Caddy：负责 TLS 加密与转发 |
-| 源站 nginx | 真正存放网页文件、转发 API 请求的服务器 | 仓库管理员 | 源站服务器 {ORIGIN_IP}：静态文件直出 + /api 转发 |
+| Cloudflare | 全球 CDN + DNS | 快递总站 | DNS 管理；{DOMAIN} 走代理（加速 + 边缘 HTTPS）；{BETA_HOST} 仅 DNS 直连 |
+| 反向代理（Caddy） | 收下 HTTPS 请求并转发到源站 | 前台柜员 | 香港中转服务器 {HK_IP} 上的 Caddy：TLS 加密 + 回源转发；因备案限制回源 Host 统一写成源站 IP，内测靠路由标记 X-Qbao-Route 区分 |
+| 源站 nginx | 真正存放网页文件、转发 API 请求的服务器 | 仓库管理员 | 源站服务器 {ORIGIN_IP}：静态直出 + /api 等转发；按路由标记把生产/内测分到两套目录与两个 API（单一 server 块 + map，见 ARCHITECTURE §2.4） |
 | Node API | 处理业务逻辑的程序 | 业务员 | 源站上的 Express 服务（生产 :3000 / 内测 :3100） |
 | PostgreSQL | 数据库 | 账本 | 生产库 qbao / 内测库 qbao_beta（同一个数据库软件里的两本账） |
-| 缓存 | 浏览器/CDN 暂存文件以加速 | 复印留底 | 生产静态资源保留 7 天，改版靠"版本号参数"刷新 |
+| 缓存 | 浏览器/CDN 暂存文件以加速 | 复印留底 | 生产静态资源保留 7 天（改版靠 ?v= 刷新）；内测不缓存 |
+| 路由标记 X-Qbao-Route | 网关打在请求头里的"走内测"暗号 | 暗号 + 门卫对名单 | 只有"香港网关 IP + beta 暗号"才算内测请求；普通访问/伪造一律进生产 |
 | WebSocket | 双向长连接 | 对讲机 | 狼人杀房间实时通信（:3011） |
 | HTTPS | 加密的网页传输 | 密封信封 | 生产与内测都走 HTTPS；源站直连 IP 为 HTTP |
 
@@ -35,20 +36,24 @@ Qbao 有三层"环境"，改动一律**从左到右**流动：
 
 ```
 【生产 · 真实用户】
-  用户 ──https://{DOMAIN}──> Cloudflare（CDN/代理）──> 香港中转 {HK_IP}（Caddy，TLS 终结）
+  用户 ──https://{DOMAIN}──> Cloudflare（CDN/代理）──> 香港中转 {HK_IP}（Caddy：TLS 终结，回源 Host 统一改写为源站 IP）
         ──http://{ORIGIN_IP}──> 源站 nginx（两个入口到同一个源站 = 同一份数据）
-                                             ├── 静态文件 /home/qbao/qbao/app（7 天缓存）
+                                             ├── 静态 {PROD_ROOT}/app（7 天缓存）
                                              ├── /api ··· → Node :3000 → PostgreSQL 库 qbao
                                              └── 狼人杀 ··· → Node :3011（房间在内存，不落库）
 
 【内测 · 测试/内测人员】
-  内测者 ──https://{BETA_HOST}──>（DNS 直连，不过 CDN）香港中转 {HK_IP}（Caddy 按主机名分流）
-        ──> 源站 nginx（按 Host 头识别内测域名）──> 静态 /home/qbao/qbao-beta/app（不缓存）
-                                             └── /api ··· → Node :3100 → PostgreSQL 库 qbao_beta
+  内测者 ──https://{BETA_HOST}──>（DNS 直连，不过 CDN）香港中转 {HK_IP}（回源 Host 同生产，另注入路由标记 X-Qbao-Route: beta）
+        ──> 源站 nginx（conf.d map：仅"路由标记=beta + 网关出口 IP 白名单"进入内测）
+                                          ├── 静态 {BETA_ROOT}/app（不缓存）
+                                          └── /api ··· → Node :3100 → PostgreSQL 库 qbao_beta
 ```
 
 关键点：**生产两个网址是同一个源站同一个账本**（域名走中转，IP 是直连），所以数据一致；
 **内测是完全独立的第二套"静态目录 + API + 账本"**，两边互不碰面。
+
+> 为什么不用"按域名分流"：大陆机房会拦截未单列备案的域名 Host（返回 403），所以回源一律用源站 IP 作 Host，
+> "进哪套"改由网关打的暗号（X-Qbao-Route）+ 网关出口 IP 白名单决定——普通访问与 IP 直连都进生产（原理见 docs/ARCHITECTURE.md §2）。
 
 ## 4. 环境矩阵
 
@@ -58,7 +63,7 @@ Qbao 有三层"环境"，改动一律**从左到右**流动：
 | 谁在用 | 开发时自己 | 你 + 受邀内测同学 | 全部真实用户 |
 | 数据库 | 无（单测用假库） | qbao_beta（可随时删了重建） | qbao（不可测试） |
 | API | 无（单测内嵌） | 源站 :3100 | 源站 :3000 |
-| 静态目录 | 仓库 `app/public/games` / 构建产物 | /home/qbao/qbao-beta/app | /home/qbao/qbao/app |
+| 静态目录 | 仓库 `app/public/games` / 构建产物 | {BETA_ROOT}/app | {PROD_ROOT}/app |
 | 缓存 | 无 | 不缓存（改完刷新即见） | 静态 7 天（改版需 ?v= 版本号） |
 | 测试动作 | 只跑单测与页面 | 注册小号/对局/兑换/清库 全都可以 | 只读巡检（金丝雀账号） |
 | 上线顺序 | ① | ②（默认验收点） | ③（验收通过后） |
@@ -154,3 +159,4 @@ VPN 只用于两件事：访问 GitHub 推送代码、登录 Cloudflare 控制�
 ## 10. 修订记录
 
 - 2026-09-08 初版：随"测试/内测与用户使用分离"规划建立（对应 DEVELOPMENT_FLOW v1.2、DEPLOY §4B、GAMES §六）。
+- 2026-09-08（同日）修订：拓扑按 ICP 分流定版方案更新（Caddy 回源 Host 改写 + X-Qbao-Route + 白名单 map，不再按 Host 分块）；静态路径统一占位符 {PROD_ROOT}/{BETA_ROOT}；机制原理指向 docs/ARCHITECTURE.md §2。

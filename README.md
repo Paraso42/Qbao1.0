@@ -101,7 +101,7 @@ cd desktop && npm ci && npm run dev                # Electron 窗口
 
 ## 质量与发布
 
-- **测试**：app 239 + server 183 + scripts 6 + desktop 5 = **433 例**，CI 全绿
+- **测试**：server 233 + app 250 + scripts 6 + desktop 5 = **494 例**（2026-09-08 复核），CI 全绿
 - **CI**：gitleaks 全历史密钥扫描 · npm audit · 构建产物冒烟（singlefile + CSP）· Vitest · ESLint 0 error
 - **发布纪律**：本地提交 → 部署 → 用户验收「测试通过」→ push + tag（版本与三端断言）→ Release 构建 → 公网逐字节核验（见 [docs/DEVELOPMENT_FLOW.md](docs/DEVELOPMENT_FLOW.md)）
 - 完整版本历史见 [CHANGELOG.md](CHANGELOG.md) 与 [Releases](https://github.com/Paraso42/Qbao/releases)
@@ -110,7 +110,7 @@ cd desktop && npm ci && npm run dev                # Electron 窗口
 
 | 文档 | 内容 |
 |------|------|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 架构说明、模块清单、技术债追踪 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 系统架构事实源：HTTPS 链路 / 双环境路由 / 安全边界 / 技术债登记 |
 | [docs/DEPLOY.md](docs/DEPLOY.md) | 部署：nginx / systemd / 数据库 / 备份 / 升级 |
 | [docs/PUBLISHING.md](docs/PUBLISHING.md) | 桌面端发布：双渠道、强制更新、撤回、回滚 |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 开发工作流、隐私分离规则、诊断脚本 |
@@ -140,7 +140,7 @@ Qbao/
 
 ## 技术架构
 
-Vue 3 + Vite + Pinia 前端（singlefile 产物，网页 / Electron 双形态共用）+ Node.js / Express 后端（14 个路由模块、约 105 个端点）+ PostgreSQL（业务状态 JSONB + rev 乐观锁同步；会话 / 聊天 / 工单 / 积分等独立关系表）。
+Vue 3 + Vite + Pinia 前端（singlefile 产物，网页 / Electron 双形态共用，手机壳 App 同源加载）+ Node.js / Express 后端（17 个路由模块）+ PostgreSQL（业务状态 JSONB + rev 乐观锁同步；会话 / 聊天 / 工单 / 积分 / 游戏等独立关系表）。
 
 关键设计：
 
@@ -149,11 +149,30 @@ Vue 3 + Vite + Pinia 前端（singlefile 产物，网页 / Electron 双形态共
 - **AI 代理层**：Provider 工厂统一接入，任务队列（SKIP LOCKED）+ 生成锁 + 成功才计费；
 - **自托管分发**：manifest-first 双渠道下载 / 更新平台，服务器不依赖 GitHub 可达性。
 
+## 公网部署架构（HTTPS 链路 · 简述）
+
+在线服务按「CDN → 边缘网关 → 大陆源站」分层提供 HTTPS（域名为占位符；真实域名/IP/路径只保存在本机 gitignored 文档，占位符纪律见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)）：
+
+```text
+用户（浏览器 / 手机壳 App / 桌面端）
+  │ https://{DOMAIN}（DNS → Cloudflare 代理）      https://{BETA_HOST}（内测 · DNS 直连）
+  ▼                                                  ▼
+Cloudflare（边缘 TLS / CDN）            Caddy 网关（TLS 终结 · 自动证书 · 回源）
+  ▼                                                  ▼
+大陆源站 nginx（HTTP）◄──────────────────────────────┘ 回源 Host 规范化 + 路由标记
+  ├─ 生产实例：静态目录 + Node API :3000 → PostgreSQL 库 qbao（静态 7 天缓存）
+  └─ 内测实例：独立静态目录 + Node API :3100 → 库 qbao_beta（不缓存，注册即管理员）
+```
+
+- **为什么有两层在线环境**：所有测试/内测先在 L1（独立库 / 端口 / 静态目录、可随时清库），验收通过后才部署 L2 生产；生产库禁止测试写入。
+- **为什么回源统一使用源站地址形态**：大陆机房按 ICP 备案拦截未单列备案域名的 Host 请求；生产与内测由「网关出口 IP 白名单 + 路由头 X-Qbao-Route」区分，白名单外一律按生产处理（入口不可伪造）。
+- 完整机制（证书模型 / 缓存纪律 / 隔离矩阵 / 防互害权限 / 变更检查单 / 技术债）见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；环境通俗版见 [docs/ENVIRONMENTS.md](docs/ENVIRONMENTS.md)。
+
 ## 隐私与安全
 
 - 公开仓库不含任何真实服务器地址与密钥（占位符纪律）；2026-07 已重写历史清除敏感信息
 - 密码 bcrypt 哈希、JWT（强密钥启动校验）、登录与全局限流
-- 上传通道扩展名白名单 + 魔数嗅探 + 附件响应头；CSP 收紧；systemd 非 root 运行
+- 上传通道扩展名白名单 + 魔数嗅探 + 附件响应头；CSP 收紧；API / 数据库仅监听 127.0.0.1（公网只暴露 nginx 受控端口）
 - AI API Key 用户自管、服务端不落库；桌面端凭据以 DPAPI（safeStorage）加密
 
 ## 许可证
