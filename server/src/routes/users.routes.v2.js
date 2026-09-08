@@ -244,6 +244,19 @@ module.exports = function (app) {
   app.put('/api/v1/users/:id', validate({ params: userIdParamsSchema, body: adminUpdateUserSchema }), requireAdmin, asyncHandler(async (req, res) => {
     const uid = req.params.id;
     const { displayName, role, password } = req.body;
+    // 防提权 / 防管理员互害（2026-09）：角色仅能由后台脚本调整（正式服管理员只能后台改写授予）；
+    // 管理员密码不可被其他管理员重置（含内测服全员管理员场景）。
+    const isSelf = Number(uid) === req.userId;
+    const tr = await pool.query('SELECT id, username, role FROM users WHERE id = $1', [uid]);
+    if (tr.rows.length === 0) throw new ApiError(404, '用户不存在');
+    const target = tr.rows[0];
+    if (role !== undefined) {
+      if (!isSelf) throw new ApiError(403, '用户角色仅能通过后台脚本调整（防管理台提权）');
+      if (role !== 'user') throw new ApiError(403, '仅支持自行放弃管理员身份（role=user）');
+    }
+    if (password && target.role === 'admin' && !isSelf) {
+      throw new ApiError(403, '不能重置管理员账号的密码（防管理员互害）');
+    }
     const updates = [];
     const params = [];
     let i = 0;
@@ -267,10 +280,11 @@ module.exports = function (app) {
 
   app.patch('/api/v1/users/:id/ban', validate({ params: userIdParamsSchema, body: banUserSchema }), requireAdmin, asyncHandler(async (req, res) => {
     const uid = req.params.id;
-    const ur = await pool.query('SELECT id, username, is_banned FROM users WHERE id = $1', [uid]);
+    const ur = await pool.query('SELECT id, username, role, is_banned FROM users WHERE id = $1', [uid]);
     if (ur.rows.length === 0) throw new ApiError(404, '用户不存在');
 
     const u = ur.rows[0];
+    if (u.role === 'admin') throw new ApiError(403, '管理员账号不受封禁管理（防管理员互害，仅后台可处理）');
     await pool.query('UPDATE users SET is_banned = $1 WHERE id = $2', [req.body.banned, uid]);
     invalidateBannedCache(uid);
 

@@ -23,8 +23,14 @@ module.exports = function (app) {
     const { username, password, displayName } = req.body;
     // T3 整改：仅当库中无管理员且用户名在 ADMIN_USERNAMES 环境变量中时才授予 admin；
     // 杜绝「首个注册用户自动成为管理员」的提权风险（公网可达时尤甚）。
-    const adminResult = await pool.query("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1");
-    const role = (adminResult.rows.length === 0 && isAdminUsername(username)) ? 'admin' : 'user';
+    // AUTO_ADMIN=1（仅内测环境可设）：注册即管理员，用于内测服全员管理员模式；生产严禁开启。
+    let role = 'user';
+    if (process.env.AUTO_ADMIN === '1') {
+      role = 'admin';
+    } else {
+      const adminResult = await pool.query("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1");
+      role = (adminResult.rows.length === 0 && isAdminUsername(username)) ? 'admin' : 'user';
+    }
     const hash = await hashPassword(password);
     const name = (displayName || username).trim();
     let result;

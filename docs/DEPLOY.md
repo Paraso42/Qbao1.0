@@ -112,6 +112,7 @@ sudo -u postgres createdb -O qbao qbao_beta
 # 3) beta 环境变量（.env）
 cd /srv/qbao-beta/server && cp .env.example .env
 #   必改：PORT=3100、PGDATABASE=qbao_beta、JWT_SECRET=新随机值（openssl rand -hex 32）；AI Key 留空；chmod 600 .env
+#   内测网全员管理员：追加 AUTO_ADMIN=1（注册即 admin，仅内测可开；生产严禁）
 
 # 4) 基础结构 + 迁移（读本目录 .env → qbao_beta；与生产共用同一 sql/ 目录）
 psql -d qbao_beta -f init.sql                       # 按实际 PG 凭据（PGPASSWORD 等）

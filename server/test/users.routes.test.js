@@ -92,3 +92,62 @@ describe('users 路由参数校验', () => {
     try { fs.unlinkSync(avatarFile); } catch (_) {}
   });
 });
+
+describe('管理员保护（防互害 / 防提权，2026-09）', () => {
+  const app = createApp();
+  let adminToken;
+
+  beforeEach(() => {
+    process.env.JWT_SECRET = 'test-secret-0123456789';
+    adminToken = signToken(9, 'admin');
+  });
+
+  it('封禁管理员账号 → 403（管理员不受封禁管理）', async () => {
+    installFakePool([
+      [/SELECT id, username, role, is_banned FROM users/, async () => ({ rows: [{ id: 3, username: 'boss', role: 'admin', is_banned: false }] })],
+    ]);
+    const res = await request(app)
+      .patch('/api/v1/users/3/ban')
+      .set('Authorization', 'Bearer ' + adminToken)
+      .send({ banned: true });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toContain('管理员');
+  });
+
+  it('重置管理员密码 → 403（防管理员互害）', async () => {
+    installFakePool([
+      [/SELECT id, username, role FROM users/, async () => ({ rows: [{ id: 3, username: 'boss', role: 'admin' }] })],
+    ]);
+    const res = await request(app)
+      .put('/api/v1/users/3')
+      .set('Authorization', 'Bearer ' + adminToken)
+      .send({ password: 'x123456' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toContain('管理员');
+  });
+
+  it('向普通用户授予 admin → 403（角色仅能后台脚本调整）', async () => {
+    installFakePool([
+      [/SELECT id, username, role FROM users/, async () => ({ rows: [{ id: 5, username: 'carl', role: 'user' }] })],
+    ]);
+    const res = await request(app)
+      .put('/api/v1/users/5')
+      .set('Authorization', 'Bearer ' + adminToken)
+      .send({ role: 'admin' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toContain('后台');
+  });
+
+  it('管理员封禁普通用户仍可用', async () => {
+    installFakePool([
+      [/SELECT id, username, role, is_banned FROM users/, async () => ({ rows: [{ id: 5, username: 'carl', role: 'user', is_banned: false }] })],
+      [/UPDATE users SET is_banned/, async () => ({ rows: [], rowCount: 1 })],
+    ]);
+    const res = await request(app)
+      .patch('/api/v1/users/5/ban')
+      .set('Authorization', 'Bearer ' + adminToken)
+      .send({ banned: true });
+    expect(res.status).toBe(200);
+    expect(res.body.user.isBanned).toBe(true);
+  });
+});

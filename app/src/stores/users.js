@@ -283,6 +283,7 @@ export const useUsersStore = defineStore('users', () => {
   function setPage(p) { page.value = p; loadUsers() }
 
   async function toggleBan(u) {
+    if (u.role === 'admin') { ui.toast('管理员账号受保护，不可被封禁（防管理员互害）', 'err'); return false }
     const action = u.isBanned ? '解封' : '封禁'
     const ok = await ui.openConfirm('确认' + action, '确定要' + action + '用户 ' + (u.displayName || u.username) + ' 吗？', action)
     if (!ok) return false

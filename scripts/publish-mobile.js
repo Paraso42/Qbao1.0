@@ -104,7 +104,8 @@ async function cmdAdd(opts) {
   const existing = entry.releases.find((r) => r.version === version);
   if (existing && !opts.force) fail('平台 ' + platform + ' 已存在版本 ' + version + '（如需覆盖请加 --force）');
   const highest = entry.releases.length ? entry.releases.reduce((a, b) => (lib.compareVersions(b.version, a.version) > 0 ? b : a)).version : null;
-  if (highest && !existing && lib.compareVersions(version, highest) <= 0 && !opts.force) {
+  // 内测（beta）版本与稳定版各自独立命名空间，不与 stable 最高版本比较；stable 仍须高于现有最高版本
+  if (channel !== 'beta' && highest && !existing && lib.compareVersions(version, highest) <= 0 && !opts.force) {
     fail('版本 ' + version + ' 不高于平台现有最高版本 ' + highest + '（如需降级/重发请加 --force）');
   }
 

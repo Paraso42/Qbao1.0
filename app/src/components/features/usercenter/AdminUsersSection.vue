@@ -42,13 +42,16 @@
       </div>
 
       <div class="ud-actions">
-        <div class="reset-pw">
-          <input v-model="resetPw" class="input" type="text" placeholder="新密码 (至少6位)">
-          <button class="btn btn-primary btn-small" @click="onResetPw">设置</button>
-        </div>
-        <button class="btn btn-small" :class="users.viewedUser.isBanned ? 'btn-success' : 'btn-danger'" @click="users.toggleBan(users.viewedUser)">
-          {{ users.viewedUser.isBanned ? '解封' : '封禁' }}
-        </button>
+        <template v-if="users.viewedUser.role !== 'admin'">
+          <div class="reset-pw">
+            <input v-model="resetPw" class="input" type="text" placeholder="新密码 (至少6位)">
+            <button class="btn btn-primary btn-small" @click="onResetPw">设置</button>
+          </div>
+          <button class="btn btn-small" :class="users.viewedUser.isBanned ? 'btn-success' : 'btn-danger'" @click="users.toggleBan(users.viewedUser)">
+            {{ users.viewedUser.isBanned ? '解封' : '封禁' }}
+          </button>
+        </template>
+        <p v-else class="protected-note" style="font-size:12px;color:var(--text-muted);margin:4px 0">管理员账号受保护：不可被其他管理员重置密码或封禁（防管理员互害）。</p>
       </div>
     </div>
 
@@ -94,7 +97,7 @@
               <span class="ur-last">{{ u.lastLoginAt ? '最后登录: ' + fmtTime(u.lastLoginAt) : '从未登录' }}</span>
             </div>
           </div>
-          <button class="btn btn-small ban-btn" :class="u.isBanned ? 'btn-success' : 'btn-danger'" @click.stop="users.toggleBan(u)">
+          <button v-if="u.role !== 'admin'" class="btn btn-small ban-btn" :class="u.isBanned ? 'btn-success' : 'btn-danger'" @click.stop="users.toggleBan(u)">
             {{ u.isBanned ? '解封' : '封禁' }}
           </button>
         </div>
@@ -155,6 +158,7 @@ function initialOf(u) { return ((u && (u.displayName || u.username)) || '?').cha
 function fmtTime(ts) { try { return new Date(ts).toLocaleString('zh-CN') } catch (e) { return '' } }
 
 async function onResetPw() {
+  if (users.viewedUser.role === 'admin') { ui.toast('管理员账号受保护，不可被重置密码', 'err'); return }
   const pw = resetPw.value
   if (!pw || pw.length < 6) { ui.toast('密码至少6位', 'err'); return }
   const ok = await ui.openConfirm('重置密码', '确定要为用户 #' + users.viewedUser.id + ' 重置密码吗？', '重置')

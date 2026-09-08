@@ -6,13 +6,13 @@
   <div class="data-tab">
     <div class="section">
       <h4><Icon name="save" :size="16" />本地备份</h4>
-      <p class="hint">将答题数据导出为 JSON 文件保存到本地，需要时可上传恢复。</p>
+      <p class="hint">将答题数据导出为 JSON 文件保存到本地，需要时可上传恢复。备份文件可在正式环境与内测环境之间互导：先在目标环境注册并登录同一账号，再「上传恢复」即可（两环境数据各自独立、互不覆盖）。</p>
       <div class="actions">
         <button class="btn btn-primary btn-small" @click="onBackup"><Icon name="download" :size="13" /> 下载备份</button>
         <button class="btn btn-warning btn-small" @click="pickRestore"><Icon name="upload" :size="13" /> 上传恢复</button>
         <input ref="fileInputRef" type="file" accept=".json,application/json" hidden @change="onRestoreFile">
       </div>
-      <p class="tip">提示：建议定期下载备份文件并妥善保管。</p>
+      <p class="tip">提示：建议定期下载备份文件并妥善保管。备份仅包含学习数据，不含账号属性——管理员身份与封禁状态不会随备份迁移，账号状态只能由管理员在后台处理。</p>
     </div>
 
     <div class="section">
