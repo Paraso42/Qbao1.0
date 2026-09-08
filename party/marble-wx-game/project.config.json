@@ -51,7 +51,7 @@
   },
   "compileType": "game",
   "libVersion": "3.7.12",
-  "appid": "wxd68424b639fc98c3",
+  "appid": "touristappid",
   "projectname": "galton-light-game",
   "condition": {},
   "isGameTourist": false,

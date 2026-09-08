@@ -18,6 +18,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  privacy-guard:
+    name: 公开脱敏扫描（占位符纪律 · 2026-09 新增）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 扫描真实基础设施痕迹（源站 IP / 私钥文件名 / 部署根 / 真实 AppID）
+        run: |
+          BANNED="114\.55\.210\.82|47\.82\.112\.36|ai_qbao_key01|/home/qbao|/srv/qbao|wxd68424b639fc98c3"
+          if git grep -n -E "$BANNED" -- .; then
+            echo "::error::公开仓库不得出现真实基础设施痕迹（纪律见 docs/DEVELOPMENT.md §1：真实值只进 local/，公开文件一律占位符）"
+            exit 1
+          fi
+          echo "privacy guard OK"
+
   backend:
     runs-on: ubuntu-latest
     steps:

@@ -347,7 +347,7 @@ QA 钩子仅内测域名与 localhost；真实地址/凭据永不进跟踪文件
 
 T5 积分并发（行锁+幂等快照+keyset 对账）、T6 成功才计费、T7 gemini SSE、T8 定时器 unref、T9 chapterMaterials 合并、
 T10 beforeunload keepalive、T11 AI 任务自动续跑、T12 持久化配额治理、T13 无 rev PUT 保护、T14 v1 死代码删除、T16 上传目录收敛、T17 迁移工具化
-等全部落地（全量 T1–T23 记录见 docs/REVIEW-2026-08.md 第十节）。v3.31–v3.37 增量：分层持久化 E2E、同步写收敛、safeStorage 加固、
+等全部落地（全量 T1–T23 原始记录随 REVIEW-2026-08 归档 local/archive/，仅本地可见；公开口径以本文件 §9 为准）。v3.31–v3.37 增量：分层持久化 E2E、同步写收敛、safeStorage 加固、
 组件/Store 拆分、API 封装统一、虚拟滚动、错题本与 AI 讲解、导入导出、登录门禁与账号隔离三层钉扎、竖屏专项、看板口径统一（恒等式单测锁定）。
 
 ## 10. 迁移与兼容性注意

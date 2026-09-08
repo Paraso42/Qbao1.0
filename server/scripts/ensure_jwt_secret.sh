@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # 确保服务器 .env 中 JWT_SECRET 为强随机值。
-# 用法（服务器 root）: bash /tmp/ensure_jwt_secret.sh /home/qbao/qbao/server/.env
+# 用法（服务器 root）: bash ensure_jwt_secret.sh <server/.env 绝对路径>
 set -euo pipefail
 
-ENV_FILE="${1:-/home/qbao/qbao/server/.env}"
+ENV_FILE="${1:?用法: bash ensure_jwt_secret.sh <server/.env 绝对路径>}"
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "MISSING_ENV_FILE $ENV_FILE"

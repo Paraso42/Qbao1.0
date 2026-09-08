@@ -20,8 +20,10 @@
 
 | 文档 | 说明 |
 |------|------|
-| [REVIEW-2026-08.md](REVIEW-2026-08.md) | v3.29 全量代码审计报告与 T1–T23 整改记录 |
 | [plans/2026-09-03-development-plan.md](plans/2026-09-03-development-plan.md) | P0–P3 轮次实施路线图（已完成归档） |
-| [plans/2026-06-07-quiz-bank-fix.md](plans/2026-06-07-quiz-bank-fix.md) | 题库修复历史方案 |
+
+> REVIEW-2026-08.md（v3.29 审计与 T1–T23 整改记录）与 plans/2026-06-07-quiz-bank-fix.md
+> 含早期真实部署痕迹，已于 2026-09 移出公开树（原件归档 `local/archive/`，仅本地）；
+> 结论已并入 ARCHITECTURE.md §9 与 REVIEW-2026-09.md。
 
 > 仓库入口为根目录 README.md；发布纪律以 DEVELOPMENT_FLOW.md 为准。

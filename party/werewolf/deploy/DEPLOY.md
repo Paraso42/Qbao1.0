@@ -1,16 +1,18 @@
 # 部署手册（生产）
 
-实机记录：2026-09-07 首次部署到 114.55.210.82；同日公网域名接入
-https://questionbox.cn（Cloudflare 边缘 → 香港 Caddy 中继 → 大陆源站），
+> 占位符：{DOMAIN}/{ORIGIN_IP}/{PROD_ROOT} 的真实值仅存本地 local/ENV.md，公开仓库不展示；执行前先替换。
+
+实机记录：2026-09-07 首次部署（源站 {ORIGIN_IP}）；同日公网域名接入
+https://{DOMAIN}（Cloudflare 边缘 → 香港 Caddy 中继 → 大陆源站），
 前端按运行时同源重建（CLIENT_BASE_URL 不再硬编码公网地址）。
 
 ## 步骤
 
 1. 前端 `vite build`（base=/games/werewolf/，CLIENT_BASE_URL=公网地址）→ tar -C dist .
 2. 后端 `tsc -p werewolf-backend`（rootDir 推断为仓库根，保持 dist/werewolf-backend 与 dist/werewolf-frontend 结构）→ tar -C werewolf-backend/dist .
-3. 运行时闭包：从安装环境提取 koa 栈传递依赖（纯 JS）→ 与后端 dist 一起解到 /home/qbao/qbao/party/werewolf/。
+3. 运行时闭包：从安装环境提取 koa 栈传递依赖（纯 JS）→ 与后端 dist 一起解到 {PROD_ROOT}/party/werewolf/。
 4. systemd 单元 + nginx 三段 location（本目录两文件），nginx -t 通过后 reload。
-5. 前端产物解到 /home/qbao/qbao/app/games/werewolf/（nginx 静态直出）。
+5. 前端产物解到 {PROD_ROOT}/app/games/werewolf/（nginx 静态直出）。
 
 ## 历史坑（勿重蹈）
 

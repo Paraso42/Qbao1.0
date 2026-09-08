@@ -9,7 +9,8 @@ Type=simple
 # T22: 非 root 运行 — 部署用户 qbao（upload 目录属主须为 qbao，见 deploy/README.md）
 User=qbao
 Group=qbao
-WorkingDirectory=/home/qbao/qbao/server
+# 部署前将 {PROD_ROOT} 替换为实际部署根（真实值仅存 local/ENV.md）
+WorkingDirectory={PROD_ROOT}/server
 ExecStart=/usr/bin/node server.js
 Restart=always
 RestartSec=3

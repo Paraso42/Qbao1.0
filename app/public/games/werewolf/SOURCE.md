@@ -19,7 +19,7 @@
    后端 TypeScript 4.9（`skipLibCheck` + `esModuleInterop`），依赖钉上游大版本
    （koa@2 / @koa/cors@3 / koa-body@4 / koa-logger@3 / koa-router@10 / socket.io@4）。
 5. 二维码加入链接（`CLIENT_BASE_URL`）改**运行时同源**：`(globalThis.location?.origin || "") + GAME_BASE`，
-   部署在任何域名（http/https）下扫码链接自动正确；历史版本硬编码 http://114.55.210.82。
+   部署在任何域名（http/https）下扫码链接自动正确（更早版本曾硬编码源站 IP，已脱敏，公开文档不再保留真实值）。
    （`globalThis` 守卫兼容后端 Node tsc 编译 shared/constants.ts。）
 6. 路由兜底（v2 修复）：路由表末尾追加 `/:pathMatch(.*)*` → 重定向首页。
    原因：直接访问 `/games/werewolf/index.html` 时 Vue Router 无匹配路由导致白屏；

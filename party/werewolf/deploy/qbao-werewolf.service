@@ -7,7 +7,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/home/qbao/qbao/party/werewolf
+# 部署前将 {PROD_ROOT} 替换为实际部署根（真实值仅存 local/ENV.md）
+WorkingDirectory={PROD_ROOT}/party/werewolf
 ExecStart=/usr/bin/node dist/werewolf-backend/src/index.js
 Restart=always
 RestartSec=3

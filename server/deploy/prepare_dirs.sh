@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ============================================================
 # Qbao 上传目录初始化（T16）
-# 用法: sudo bash prepare_dirs.sh [部署根目录]   （默认 /home/qbao/qbao）
+# 用法: sudo bash prepare_dirs.sh <部署根目录>   （必填；占位符 {PROD_ROOT} 的真实值仅存 local/ENV.md）
 # 在首次部署/升级后以部署用户执行一次；systemd 服务运行前目录必须就绪。
 # ============================================================
 set -euo pipefail
 
-BASE="${1:-/home/qbao/qbao}"
+BASE="${1:?请提供部署根目录（公开文档用 {PROD_ROOT} 占位，真实值见 local/ENV.md）}"
 APP_USER="${SUDO_USER:-qbao}"
 UPLOADS="$BASE/uploads"
 

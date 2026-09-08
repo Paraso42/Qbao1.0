@@ -18,6 +18,7 @@
 **铁律**：真实服务器地址、密钥、用户数据、VPN 配置一律只放 `local/`（已被 `.gitignore` 整体排除）。部署文档只用占位符。
 公开文档统一占位符：{DOMAIN}/{BETA_HOST} 域名、{ORIGIN_IP}/{HK_IP} IP、{PROD_ROOT}/{BETA_ROOT} 部署根、{BACKUP_DIR} 备份目录、{SSH_USER} 服务器用户；
 提交前对改动文件做敏感词扫描（真实域名 / IP / 密钥模式不得出现在跟踪文件中）。
+CI 另有 privacy-guard job（`.github/workflows/ci.yml`）硬性拦截真实基础设施痕迹（源站 IP / 私钥文件名 / 部署根路径 / 真实微信 AppID），命中即构建失败。
 
 ## 2. 目录结构
 
@@ -82,7 +83,7 @@ node server/scripts/diagnose_api.js <api_key> [model] [jwt_token]
 - **前端**：`cd app && npx vitest run`。
 - **套件规模基线**（随迭代刷新；唯一出处 = docs/DEVELOPMENT_FLOW.md §5）：server 233 / app 250 / scripts 6 / desktop 5（2026-09-08 复核）。
 - **构建**：`cd app && npm run build`（Vite singlefile → dist/index.html，含 CSP；CI 冒烟校验）。
-- **CI**（`.github/workflows/ci.yml`）：gitleaks 密钥扫描 → 后端语法+测试 → 前端构建冒烟+单测 → 双方 npm audit（高危告警不阻断）。
+- **CI**（`.github/workflows/ci.yml`）：gitleaks 密钥扫描 → 公开脱敏扫描（privacy-guard，§1 护栏）→ 后端语法+测试 → 前端构建冒烟+单测 → 双方 npm audit（高危告警不阻断）。
 - 新增/修改逻辑时按模块补测试：routes 用 supertest + installFakePool；纯函数直接单测。
 
 ## 7. 数据库变更
