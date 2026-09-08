@@ -189,6 +189,23 @@
                   <div v-if="cur.releases.length === 0" class="dl-empty">暂无版本信息</div>
                 </div>
               </div>
+              <div v-if="cur.betaReleases && cur.betaReleases.length" class="settings-section">
+                <h4>内测版（可选）<span class="ver-badge b-old">Beta</span></h4>
+                <p class="col-hint">Windows 内测包用于提前体验新功能与参与反馈。安装后在应用内「设置 → 桌面端」把服务器地址填写为内测网址，即可连接内测环境（数据与正式版隔离）；测试包更新走 beta 渠道，需手动「检查更新」。</p>
+                <div class="dl-list">
+                  <div v-for="r in cur.betaReleases" :key="r.version" class="dl-row">
+                    <div class="dl-row-main">
+                      <span class="dl-ver">v{{ r.version }}</span>
+                      <span class="ver-badge" :class="r.betaMark === '内测最新' ? 'b-latest' : 'b-old'">{{ r.betaMark }}</span>
+                    </div>
+                    <div class="dl-row-sub">{{ r.sizeText }} · {{ r.dateText }}</div>
+                    <div class="dl-row-actions">
+                      <button class="btn btn-secondary btn-small" :disabled="!r.sha256" @click="copySha(r.sha256)">SHA256</button>
+                      <a class="btn btn-primary btn-small dl-a" :href="dlUrl(r.fileName)">下载内测版</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <div v-if="cur.published" class="settings-section">
                 <h4>安全校验（SHA256）</h4>
                 <div class="sha-row">
@@ -418,8 +435,11 @@ async function loadDlCenter() {
   s.message = '正在获取下载信息…'
   try {
     if (p === 'windows') {
-      const [mani, stats] = await Promise.all([fetchDesktopManifest(), fetchDesktopStats().catch(() => null)])
+      const [mani, stats, betaMani] = await Promise.all([fetchDesktopManifest(), fetchDesktopStats().catch(() => null), fetchDesktopManifest(null, 'beta').catch(() => null)])
       const releases = parseReleases(mani)
+      const br = (betaMani && Array.isArray(betaMani.releases)) ? parseReleases(betaMani) : []
+      br.forEach((r, i) => { r.betaMark = i === 0 ? '内测最新' : '内测版' })
+      s.betaReleases = br
       winStats.value = buildStatsMap(stats)
       s.releases = releases
       const top = releases.find((r) => !r.retracted) || releases[0] || null
