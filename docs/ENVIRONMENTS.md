@@ -97,12 +97,14 @@ Qbao 有三层"环境"，改动一律**从左到右**流动：
 | 当 App 用 | 手机浏览器「添加到主屏幕」，全屏体验 |
 | 游戏自动化冒烟 | {BETA_HOST} 或 localhost 下游戏页加 `?qa=1&token=…`（生产域名自动失效） |
 | 桌面客户端 | 安装包走既有 beta 渠道 + 应用内「服务器地址」填 https://{BETA_HOST} |
-| 手机壳 App 内测 | 可选阶段：单独构建"内测版"壳（独立应用标识，与正式版共存安装），构建命令见 §7.1 |
+| 手机壳 App 内测 | 下载页/下载中心「内测版（可选）」自选下载（com.qbao.beta 与正式版共存安装），构建与发布见 §7.1 |
 | 内测出问题 | qbao_beta 一键重建（命令见 docs/DEPLOY.md 4B），不影响任何真实用户 |
 
-### 7.1 手机壳"内测版"（可选阶段，未默认开启）
+### 7.1 手机壳"内测版"（已落地 2026-09-08）
 
-壳工程 `mobile/` 的 `capacitor.config.ts` 支持环境变量覆盖（`QBAO_APP_ID` / `QBAO_SHELL_URL` / `QBAO_APP_NAME`，默认值 = 正式版）。内测版构建 = 指定内测 URL 与独立应用标识 com.qbao.beta，使用同一签名，可与正式版**共存安装**、数据互不干扰；内测版不进正式下载中心清单，由文件/二维码直传分发。是否产出由每轮内测需求决定。
+- 构建：`scripts/build-beta-apk.ps1`（产物 .tmp/beta-apk/Qbao-Android-1.0.1-beta.N.apk）。壳工程支持环境变量覆盖与 gradle `-PqbaoBeta` 切换：应用标识 com.qbao.beta、应用名"Qbao 内测"、指向内测域名，与正式版**同签名共存安装**、数据互不干扰。
+- 发布：`publish-mobile.js add --channel beta`（记录 channel=beta；stable 默认纪律不变）。
+- 用户入口（**自选、非强制**）：下载页 /dl 与网页「设置 → 下载中心」Android 区自动出现"内测版（可选）"区块（徽标 Beta/内测最新），正式版区域不受影响。
 
 ## 8. 常见问题（FAQ）
 

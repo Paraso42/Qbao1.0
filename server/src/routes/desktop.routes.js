@@ -421,9 +421,18 @@ function dlChrome(title, sub, current, body) {
 function mobileDlPage(platform, releases) {
   const isIos = platform === 'ios';
   const label = isIos ? 'iOS' : 'Android';
-  const top = releases.find(function (r) { return !r.retracted; }) || releases[0] || null;
+  const stable = releases.filter(function (r) { return r.channel !== 'beta'; });
+  const betas = releases.filter(function (r) { return r.channel === 'beta'; });
+  const top = stable.find(function (r) { return !r.retracted; }) || stable[0] || null;
   const dlPath = '/api/v1/apps/download?platform=' + platform + '&file=';
-  const rows = releases.map(function (r, i) { return mobileReleaseRow(dlPath, r, i === 0 && !r.retracted); }).join('\n');
+  const rows = stable.map(function (r, i) { return mobileReleaseRow(dlPath, r, i === 0 && !r.retracted); }).join('\n');
+  const betaCard = betas.length
+    ? '<div class="card"><h2>Qbao 内测版（' + label + '）<span class="badge badge-beta">Beta</span></h2>'
+      + '<p class="sub">内测版连接独立的内测环境（与正式版数据互不相通），用于提前体验新功能与反馈问题；应用标识与正式版不同，可与正式版共存安装。日常使用请选择正式版。</p>'
+      + '<table><tr><th>版本</th><th>状态</th><th>大小</th><th>更新日期</th><th>操作</th></tr>'
+      + betas.map(function (r, i) { return mobileBetaRow(dlPath, r, i === 0); }).join('\n')
+      + '</table></div>'
+    : '';
   const emptyNote = top ? '' : isIos
     ? '<div class="empty-note"><b>iOS 安装包尚未发布。</b>iOS 包需在 macOS 上使用 Xcode + Apple Developer 账号签名后分发（TestFlight / 企业签名）。发布就绪后本页会直接提供下载与 SHA256。当前 iPhone / iPad 用户可先用 Safari 打开本站，通过「分享 → 添加到主屏幕」获得全屏 App 入口；账号数据与网页版 / 桌面版 / Android 版云端同步。</div>'
     : '<div class="empty-note">Android 安装包尚未发布，请稍后再来。发布后本页将直接提供 APK 下载与 SHA256 校验值。</div>';
@@ -434,7 +443,7 @@ function mobileDlPage(platform, releases) {
         + '<div class="hero-sha">SHA256：<code class="sha">' + esc(top.sha256) + '</code>'
         + ' <button class="btn-copy" data-copy="' + esc(top.sha256) + '" onclick="copySha(this)">复制</button></div></div>'
     : '<div class="hero"><div class="hero-ver">' + label + ' 版安装包暂未发布</div></div>';
-  const history = top || releases.length
+  const history = stable.length
     ? '<div class="card"><h2>历史版本（覆盖安装保留数据）</h2>'
         + '<table><tr><th>版本</th><th>状态</th><th>大小</th><th>更新日期</th><th>操作</th></tr>' + rows + '</table></div>'
     : '';
@@ -447,7 +456,7 @@ function mobileDlPage(platform, releases) {
         + '<li>手机浏览器打开本页点击「立即下载」，下载 .apk（Android 5.1 及以上）；</li>'
         + '<li>安装时如提示「未知来源」，请允许本次安装；</li>'
         + '<li>覆盖安装不影响数据；账号数据与网页版 / 桌面版 / iOS 版云端同步。</li></ol></div>';
-  const body = emptyNote + hero + history + guide
+  const body = emptyNote + hero + betaCard + history + guide
     + '<div class="card"><h2>其他平台</h2><ol>'
     + '<li><a href="/dl">Windows 桌面版下载</a>（独立窗口 + 自动更新）</li>'
     + (isIos ? '<li><a href="/dl?platform=android">Android 版下载</a>（APK，本机直装）</li>' : '<li><a href="/dl?platform=ios">iOS 版下载</a>（.ipa 待 macOS 签名发布；iPhone/iPad 可先用 Safari「添加到主屏幕」）</li>')
@@ -455,10 +464,26 @@ function mobileDlPage(platform, releases) {
   return dlChrome('Qbao ' + label + ' 版下载', '由本站服务器直接分发（中国大陆镜像）。与网页版账号数据云端同步，多端一致。', platform, body);
 }
 
+function mobileBetaRow(dlPath, r, isNewest) {
+  const badge = isNewest ? '<span class="badge badge-beta">内测最新</span>' : '<span class="badge badge-beta">内测版</span>';
+  const notes = (r.releaseNotes && r.releaseNotes.length) ? '<div class="row-sha">' + r.releaseNotes.map(esc).join('；') + '</div>' : '';
+  return '<tr>'
+    + '<td data-label="版本"><b>' + esc(r.version) + '</b>' + badge + '</td>'
+    + '<td data-label="状态">可用（内测）</td>'
+    + '<td data-label="大小">' + formatBytes(r.sizeBytes) + '</td>'
+    + '<td data-label="更新日期">' + formatDate(r.releaseDate) + '</td>'
+    + '<td data-label="操作"><a class="dl-btn" href="' + dlPath + encodeURIComponent(r.fileName) + '">下载</a>'
+    + '<div class="row-sha">SHA256<br><code class="sha">' + esc(r.sha256) + '</code>'
+    + ' <button class="btn-copy" data-copy="' + esc(r.sha256) + '" onclick="copySha(this)">复制</button></div>'
+    + notes + '</td></tr>';
+}
+
 function mobileReleaseRow(dlPath, r, isTop) {
   const statusBadge = r.retracted
     ? '<span class="badge badge-gone">已撤回</span>'
-    : isTop ? '<span class="badge badge-stable">当前最新</span>' : '<span class="badge badge-old">旧版</span>';
+    : isTop ? '<span class="badge badge-stable">当前最新</span>'
+    : r.channel === 'beta' ? '<span class="badge badge-beta">内测版</span>'
+    : '<span class="badge badge-old">旧版</span>';
   const action = r.retracted
     ? '<span style="color:#8c959f;font-size:12px">已下架</span>'
     : '<a class="dl-btn" href="' + dlPath + encodeURIComponent(r.fileName) + '">下载</a>';

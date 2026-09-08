@@ -186,7 +186,8 @@ function validateManifestStructure(m) {
         const nameMatch = String(r.fileName || '').match(MOBILE_FILE_RE);
         if (!nameMatch) throw new Error('平台 ' + pf + ' 非法文件名: ' + r.fileName);
         if (String(nameMatch[1]).toLowerCase() !== pf) throw new Error('平台 ' + pf + ' 文件名平台不匹配: ' + r.fileName);
-        if (isPrerelease(r.version)) throw new Error('平台 ' + pf + ' 暂不支持 prerelease: ' + r.version);
+        if (r.channel !== undefined && r.channel !== 'beta') throw new Error('平台 ' + pf + ' 非法 channel: ' + r.channel);
+        if (isPrerelease(r.version) && r.channel !== 'beta') throw new Error('平台 ' + pf + ' 暂不支持 prerelease（内测记录需 channel=beta）: ' + r.version);
         if (r.required) throw new Error('平台 ' + pf + ' 禁止 required');
         if (seen.has(r.version)) throw new Error('平台 ' + pf + ' 重复版本: ' + r.version);
         if (seenFiles.has(r.fileName)) throw new Error('平台 ' + pf + ' 重复文件: ' + r.fileName);

@@ -127,8 +127,8 @@ node scripts/publish-installer.js add --dir <stage> --channel beta [--prune]
 ## 8. 手机端发布（Android / iOS · v3.38 起）
 
 > 与桌面端共用同一份 `downloads/manifest.json`（schemaVersion 2 起含 `platforms{android,ios}`）。
-> 入库工具：**scripts/publish-mobile.js**（零依赖；add/retract/ls/verify，纪律与桌面端一致：
-> 仅 stable 语义——拒绝 prerelease/required；重复需 --force；清单引用的文件必须真实存在；写入前滚动备份 manifest.json.bak）。
+> 入库工具：**scripts/publish-mobile.js**（零依赖；add/retract/ls/verify；写入前滚动备份 manifest.json.bak）。
+> 渠道纪律：默认 **stable**（拒绝 prerelease/required，重复需 --force）；**--channel beta** 用于内测版（允许 X.Y.Z-beta.N 版本号，记录 channel=beta，下载页/下载中心单列「内测版（可选）」，正式版默认入口不受影响）。
 
 ### 8.1 Android：构建
 ```bash
@@ -136,9 +136,9 @@ node scripts/publish-installer.js add --dir <stage> --channel beta [--prune]
 cd mobile/android && gradlew.bat assembleRelease          # Windows
 # 或 ./gradlew assembleRelease                              # macOS/Linux
 # 产物：mobile/android/app/build/outputs/apk/release/app-release.apk（release 签名，keystore 见 mobile/README.md）
-# 可选项——内测版壳：capacitor.config.ts 支持环境变量 QBAO_APP_ID/QBAO_SHELL_URL/QBAO_APP_NAME 覆盖，
-#   可构建"内测版"（独立应用标识、指向内测域名、与正式版共存安装）；内测包不进下载中心清单，
-#   文件/二维码直传分发（见 docs/ENVIRONMENTS.md §7.1）
+# 内测版壳（已落地）：./scripts/build-beta-apk.ps1 -BetaNum 1  →  .tmp/beta-apk/Qbao-Android-1.0.1-beta.N.apk
+#   入库：node scripts/publish-mobile.js add --platform android --dir .tmp/beta-apk --channel beta --root <downloads>
+#   用户入口：下载页 /dl 与下载中心 Android 区「内测版（可选）」（自选安装，见 docs/ENVIRONMENTS.md §7.1）
 # 版本号：android/app/build.gradle → versionCode / versionName（与清单版本一致，如 1.0.0）
 ```
 

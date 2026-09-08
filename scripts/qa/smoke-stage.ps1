@@ -71,7 +71,7 @@ if (-not [string]::IsNullOrEmpty($token)) {
       Check '成绩上报(写内测库)' $true
     } catch { Check '成绩上报(写内测库)' $false $_.Exception.Message }
     if ($Marble) {
-      try { $p = Invoke-RestMethod -TimeoutSec 25 -Uri ($C.ApiBase + '/games/marble/profile') -Headers $auth; Check 'marble profile(读)' ($null -ne $p.data) }
+      try { $p = Invoke-RestMethod -TimeoutSec 25 -Uri ($C.ApiBase + '/games/marble/profile') -Headers $auth; Check 'marble profile(读)' ($null -ne $p.marbles) }
       catch { Check 'marble profile(读)' $false $_.Exception.Message }
     }
   } else {

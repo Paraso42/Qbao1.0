@@ -5,15 +5,25 @@ def kpProps = new Properties()
 def kpFile = rootProject.file('local.properties')
 if (kpFile.exists()) kpFile.withInputStream { kpProps.load(it) }
 
+// 内测版（com.qbao.beta · 指向内测环境）：构建加 -PqbaoBeta（可选 -PbetaNum=N），由 scripts/build-beta-apk.ps1 驱动
+// 正式版路径与行为完全不变（无属性时的默认值）
+def qbaoBeta = project.hasProperty('qbaoBeta')
+def qbaoBetaNum = qbaoBeta ? String.valueOf(project.findProperty('betaNum') ?: '1') : ''
+def qbaoAppId = qbaoBeta ? 'com.qbao.beta' : 'com.qbao.app'
+def qbaoAppLabel = qbaoBeta ? 'Qbao 内测' : 'Qbao'
+def qbaoVersionName = qbaoBeta ? ('1.0.1-beta.' + qbaoBetaNum) : '1.0.1'
+def qbaoVersionCode = qbaoBeta ? (1000 + Integer.parseInt(qbaoBetaNum)) : 2
+
 android {
     namespace "com.qbao.app"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.qbao.app"
+        applicationId qbaoAppId
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.0.1"
+        versionCode qbaoVersionCode
+        versionName qbaoVersionName
+        manifestPlaceholders = [ appLabel: qbaoAppLabel ]
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

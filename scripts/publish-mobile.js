@@ -2,7 +2,8 @@
 
 // Qbao 手机端安装包发布工具（v1 · 零第三方依赖，与 publish-installer.js 共用 installer-lib）
 // 用法：
-//   node scripts/publish-mobile.js add --platform android|ios --dir <暂存目录> [--notes "一行"] [--force] [--root ./downloads]
+//   node scripts/publish-mobile.js add --platform android|ios --dir <暂存目录> [--channel stable|beta] [--notes "一行"] [--force] [--root ./downloads]
+//   渠道纪律：默认 stable（禁 prerelease 版本号）；--channel beta 允许 X.Y.Z-beta.N 并写入 channel=beta（下载页/下载中心单列「内测版」，用户自选）
 //   node scripts/publish-mobile.js retract --platform android|ios --version X.Y.Z --reason "原因"
 //   node scripts/publish-mobile.js ls [--platform android|ios]
 //   node scripts/publish-mobile.js verify --file <apk> [--sha256 <期望值>]
@@ -53,6 +54,7 @@ function breakdown(list) {
   return list.map((r) => {
     const marks = [];
     if (r.retracted) marks.push('已撤回');
+    if (r.channel === 'beta') marks.push('内测');
     marks.push(r.version);
     return '  ' + marks.join(' ') + '  ' + r.fileName;
   }).join('\n');
@@ -72,6 +74,8 @@ function ensureManifestV2(m) {
 async function cmdAdd(opts) {
   const root = resolveRoot(opts.root);
   const platform = platformOf(opts);
+  const channel = String(opts.channel || 'stable').toLowerCase();
+  if (!['stable', 'beta'].includes(channel)) fail('未知渠道: ' + opts.channel + '（可选 stable|beta）');
   const dir = path.resolve(String(opts.dir || ''));
   if (!dir || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) fail('--dir 暂存目录不存在: ' + dir);
   const ext = platform === 'ios' ? '.ipa' : '.apk';
@@ -92,7 +96,7 @@ async function cmdAdd(opts) {
   const m = lib.MOBILE_FILE_RE.exec(fileName);
   const version = m[2];
   if (!lib.VERSION_RE.test(version)) fail('非法版本号: ' + version);
-  if (lib.isPrerelease(version)) fail('手机端暂不支持 prerelease 版本: ' + version + '（stable 纪律）');
+  if (lib.isPrerelease(version) && channel !== 'beta') fail('手机端 stable 暂不支持 prerelease 版本: ' + version + '（内测请用 --channel beta）');
 
   const manifest = lib.loadManifest(root);
   ensureManifestV2(manifest);
@@ -117,6 +121,7 @@ async function cmdAdd(opts) {
     releaseDate: new Date().toISOString(),
     releaseNotes: opts.notes ? [String(opts.notes)] : [],
     retracted: null,
+    channel: channel === 'beta' ? 'beta' : undefined,
   };
   if (existing) {
     const idx = entry.releases.indexOf(existing);
@@ -126,7 +131,7 @@ async function cmdAdd(opts) {
   }
   entry.releases = lib.sortReleasesDesc(entry.releases);
   lib.saveManifestAtomic(root, manifest);
-  console.log('[publish-mobile] 已发布 ' + platform + ' v' + version + ' → ' + fileName);
+  console.log('[publish-mobile] 已发布 ' + platform + ' (' + channel + ') v' + version + ' → ' + fileName);
   console.log('  sha256: ' + sha256);
   console.log('  size: ' + sizeBytes + ' B');
 }

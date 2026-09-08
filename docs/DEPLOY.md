@@ -158,8 +158,9 @@ server {
 }
 ```
 
-> HTTPS：{BETA_HOST} 由中转服务器（Caddy）终结 TLS 并回源 http://{ORIGIN_IP}（按 Host 头分流到本块）；
-> 若 {BETA_HOST} 的 DNS 记录为「仅 DNS（不走 CDN 代理）」，中转 Caddy 会自动签发证书（HTTP-01 直连可达）。
+> HTTPS：{BETA_HOST} 由中转服务器（Caddy）终结 TLS 并回源 http://{ORIGIN_IP}。
+> **备案拦截说明（2026-09-08 实测）**：大陆源站会拦截公网请求中"未单列备案域名"的 Host 头（返回 403 ICP Non-compliance），故回源 Host **统一改写为源站 IP**（与生产一致），内测识别改用自定义头 `X-Qbao-Route: beta`：源站 nginx 以 conf.d map（`$http_x_qbao_route|$remote_addr`，仅信任中转出口 IP）分流 root/API/缓存头——生产与内测共享一个 server 块，不再按 Host 分块。上表 nginx 片段为逻辑示意，实际以服务器 conf 为准。
+> 证书：{BETA_HOST} 的 DNS 记录为「仅 DNS（不走 CDN 代理）」时，中转 Caddy 自动签发证书（HTTP-01 直连可达）。
 
 ### 4B.4 部署 / 冒烟 / 清理
 

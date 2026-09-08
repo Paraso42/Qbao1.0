@@ -65,6 +65,7 @@ export function parseReleases(j) {
     required: r.required || null,
     retracted: r.retracted && r.retracted.reason ? r.retracted.reason : null,
     stopped: !!r.stopped,
+    channel: r.channel === 'beta' ? 'beta' : null,
     current: i === 0,
   }))
 }

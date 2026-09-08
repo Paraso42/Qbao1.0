@@ -236,6 +236,24 @@
                 </div>
                 <p class="ai-help-note">升级安装包请保留并重复使用同一次下载来源（正式签名不变），覆盖安装不会影响数据。</p>
               </div>
+              <div v-if="cur.betaReleases && cur.betaReleases.length" class="settings-section">
+                <h4>内测版（可选）<span class="ver-badge b-old">Beta</span></h4>
+                <p class="col-hint">内测版是独立的「内测版应用」（应用标识与正式版不同，可共存安装、互不影响），连接独立的内测环境以提前体验新功能与参与反馈；其账号数据与正式版不互通，日常使用请安装正式版。</p>
+                <div class="dl-list">
+                  <div v-for="r in cur.betaReleases" :key="r.version" class="dl-row">
+                    <div class="dl-row-main">
+                      <span class="dl-ver">v{{ r.version }}</span>
+                      <span class="ver-badge" :class="r.betaMark === '内测最新' ? 'b-latest' : 'b-old'">{{ r.betaMark }}</span>
+                    </div>
+                    <div class="dl-row-sub">{{ r.sizeText }} · {{ r.dateText }}<span v-if="statOf(r)" class="dl-count">下载 {{ statOf(r) }} 次</span></div>
+                    <div class="dl-row-actions">
+                      <button class="btn btn-secondary btn-small" :disabled="!r.sha256" @click="copySha(r.sha256)">SHA256</button>
+                      <a class="btn btn-primary btn-small dl-a" :href="appsDlUrl('android', r.fileName)">下载内测版</a>
+                    </div>
+                  </div>
+                </div>
+                <p class="ai-help-note">安装说明：下载后直接安装即可（图标/名称带「内测」，与正式版并存）；若曾安装过更早的内测版，覆盖安装不会影响其数据。正式版与本页内测版互不覆盖。</p>
+              </div>
             </template>
 
             <!-- iOS -->
@@ -354,7 +372,7 @@ function detectDlPlatform() {
 const detectedDl = ref(detectDlPlatform())
 const activeDl = ref(detectDlPlatform())
 function emptyDl() {
-  return { state: 'info', message: '正在获取下载信息…', loading: false, ready: false, published: false, version: '—', sizeText: '—', dateText: '—', sha256: '', fileName: '', releases: [] }
+  return { state: 'info', message: '正在获取下载信息…', loading: false, ready: false, published: false, version: '—', sizeText: '—', dateText: '—', sha256: '', fileName: '', releases: [], betaReleases: [] }
 }
 const dls = ref({ windows: emptyDl(), android: emptyDl(), ios: emptyDl() })
 const winStats = ref({})   // windows：version → 下载次数
@@ -410,15 +428,18 @@ async function loadDlCenter() {
       s.message = top ? '已就绪，点击「下载桌面版」开始下载' : '暂无可用版本'
     } else {
       const [mani, stats] = await Promise.all([fetchAppsManifest(null, p), fetchAppsStats(null, p).catch(() => null)])
-      const releases = parseReleases(mani)
+      const all = parseReleases(mani)
+      const br = all.filter((r) => r.channel === 'beta')
+      br.forEach((r, i) => { r.betaMark = i === 0 ? '内测最新' : '内测版' })
+      s.betaReleases = br
+      s.releases = all.filter((r) => r.channel !== 'beta')
       const m = {}
       if (stats && Array.isArray(stats.perFile)) for (const f of stats.perFile) m[f.fileName] = f.downloads
       appsStats.value = m
-      s.releases = releases
-      const top = releases.find((r) => !r.retracted) || releases[0] || null
+      const top = s.releases.find((r) => !r.retracted) || s.releases[0] || null
       applyTopDl(s, top)
       s.published = !!top
-      s.message = top ? '已就绪，点击下载' + (p === 'android' ? ' APK' : ' iOS 安装包') + '开始安装' : '该平台暂无可下载版本'
+      s.message = top ? '已就绪，点击下载' + (p === 'android' ? ' APK' : ' iOS 安装包') + '开始安装' : (s.betaReleases.length ? '正式版暂未发布；下方「内测版」可先体验（数据与正式版隔离）' : '该平台暂无可下载版本')
     }
     s.ready = true
     s.state = 'ok'

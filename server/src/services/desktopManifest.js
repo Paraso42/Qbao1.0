@@ -186,7 +186,8 @@ function validateManifest(m) {
       for (const r of entry.releases) {
         if (!r || typeof r !== 'object') throw new Error('平台 ' + pf + ' 存在非法 release 条目');
         if (!VERSION_RE.test(r.version || '')) throw new Error('平台 ' + pf + ' 非法版本号: ' + r.version);
-        if (isPrerelease(r.version)) throw new Error('平台 ' + pf + ' 暂不支持 prerelease 版本: ' + r.version);
+        if (r.channel !== undefined && r.channel !== 'beta') throw new Error('平台 ' + pf + ' 非法 channel: ' + r.channel);
+        if (isPrerelease(r.version) && r.channel !== 'beta') throw new Error('平台 ' + pf + ' 暂不支持 prerelease 版本（内测记录需 channel=beta）: ' + r.version);
         const nameMatch = String(r.fileName || '').match(MOBILE_FILE_RE);
         if (!nameMatch) throw new Error('平台 ' + pf + ' 非法文件名: ' + r.fileName);
         if (String(nameMatch[1]).toLowerCase() !== pf) throw new Error('平台 ' + pf + ' 文件名平台不匹配: ' + r.fileName);

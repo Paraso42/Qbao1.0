@@ -28,6 +28,7 @@ function serializeRelease(r) {
     releaseDate: r.releaseDate,
     releaseNotes: r.releaseNotes || [],
     retracted: r.retracted ? { reason: r.retracted.reason, at: r.retracted.at || null } : null,
+    channel: r.channel === 'beta' ? 'beta' : null,
   };
 }
 
