@@ -13,6 +13,7 @@
 | [DEVELOPMENT_FLOW.md](DEVELOPMENT_FLOW.md) | 发布流程唯一事实源 + 完成定义（DoD）检核表 |
 | [MOBILE_UX.md](MOBILE_UX.md) | 移动端交互规范与真机验收清单 |
 | [REVIEW-2026-09.md](REVIEW-2026-09.md) | 项目全貌与专业点评（2026-09，含短板与路线图） |
+| [ENVIRONMENTS.md](ENVIRONMENTS.md) | 环境与网络地图：L0/L1/L2 隔离、内测入口与 FAQ |
 | [GAMES.md](GAMES.md) | 游戏空间：门户形态、等待引导、数据契约、联机/积分预留 |
 
 ## 归档

@@ -156,6 +156,13 @@
 <script src="./common/qbao-hook.js"></script>
 <script>
 (function () {
+  // 内测环境角标：beta.* 前缀域名下提示（防把内测当正式站）；生产主机名不显示
+  if (/^beta./i.test(String(location.hostname))) {
+    var b = document.createElement('div');
+    b.textContent = '内测环境 · 独立数据，可随时重建';
+    b.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:99;background:#ffb020;color:#1c2333;font:600 12px/1.4 system-ui,sans-serif;padding:6px 10px;border-radius:999px;box-shadow:0 2px 6px rgba(0,0,0,.25)';
+    document.body.appendChild(b);
+  }
   var NAME = { '2048': '最佳分数', froggy: '通关进度', gridgarden: '通关进度', tetris: '最佳分数', marble: '最佳单局' };
   function fmt(id, g) {
     if (!g) return '';

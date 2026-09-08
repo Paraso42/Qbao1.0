@@ -121,6 +121,8 @@ node scripts/publish-installer.js add --dir <stage> --channel beta [--prune]
 - 测试者订阅方式：desktop/config.local.json 或用户设置写入 `updateChannel: beta`。
 - 测试版不推 tag、不发 CHANGELOG、不进发布记录（仅记录测试结论）。
 
+> 术语澄清：本节「beta」指**安装包试验渠道**；「L1 内测环境」（服务器数据隔离：独立库/端口/静态目录）见 docs/ENVIRONMENTS.md。两者正交可组合：桌面测试包 + 应用内「服务器地址」指向内测域名，即在隔离环境里测试真实安装形态。
+
 
 ## 8. 手机端发布（Android / iOS · v3.38 起）
 
@@ -134,6 +136,9 @@ node scripts/publish-installer.js add --dir <stage> --channel beta [--prune]
 cd mobile/android && gradlew.bat assembleRelease          # Windows
 # 或 ./gradlew assembleRelease                              # macOS/Linux
 # 产物：mobile/android/app/build/outputs/apk/release/app-release.apk（release 签名，keystore 见 mobile/README.md）
+# 可选项——内测版壳：capacitor.config.ts 支持环境变量 QBAO_APP_ID/QBAO_SHELL_URL/QBAO_APP_NAME 覆盖，
+#   可构建"内测版"（独立应用标识、指向内测域名、与正式版共存安装）；内测包不进下载中心清单，
+#   文件/二维码直传分发（见 docs/ENVIRONMENTS.md §7.1）
 # 版本号：android/app/build.gradle → versionCode / versionName（与清单版本一致，如 1.0.0）
 ```
 

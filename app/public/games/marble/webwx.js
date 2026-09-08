@@ -211,11 +211,23 @@ function finishReady(seed) {
   if (bootEl && bootEl.parentNode) bootEl.parentNode.removeChild(bootEl);
   bridge._flush();
 }
-function boot() {
-  // QA 后门（仅 ?qa=1&token=... 显式启用）：把测试令牌写入 localStorage（qbao-hook 会读取）
+// QA 宿主门禁：与 app/src/games/qa-gate.js 同源逻辑（两端同步改动，单测见 qa-gate.test.js）。
+// 规则：localhost/127.0.0.1/::1 与 beta.* 前缀域名放行；生产主机名一律 false。
+function qaGate() {
   try {
-    var qs = new URLSearchParams(location.search);
-    if (qs.get('qa') === '1' && qs.get('token')) localStorage.setItem('qbao_token', qs.get('token'));
+    var h = String(location.hostname || '').toLowerCase();
+    if (h === 'localhost' || h === '127.0.0.1' || h === '::1') return true;
+    return h.indexOf('beta.') === 0;
+  } catch (e) { return false; }
+}
+function boot() {
+  // QA 后门（仅内测主机且 ?qa=1&token=... 显式启用）：把测试令牌写入 localStorage（qbao-hook 会读取）
+  try {
+    if (!qaGate()) { /* 生产/未知主机名：忽略 QA 参数 */ }
+    else {
+      var qs = new URLSearchParams(location.search);
+      if (qs.get('qa') === '1' && qs.get('token')) localStorage.setItem('qbao_token', qs.get('token'));
+    }
   } catch (e) { /* ignore */ }
   if (!hook || !hook.getSession) { finishReady(null); tryStartQA(); return; }
   hook.getSession(function (s) {
@@ -235,6 +247,7 @@ function boot() {
 }
 function tryStartQA() {
   // 游客与云存档（登录态）都可自动冒烟；云模式会真实走 开局→结算 API
+  if (!qaGate()) return; // 生产/未知主机名一律不启动自动冒烟（qa-gate.js）
   if (!/qa=1/.test(location.search)) return;
   setTimeout(function () {
     var W = window.innerWidth;

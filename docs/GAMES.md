@@ -88,3 +88,19 @@
 
 > 长线观察项：user_games_stats 单行 JSONB 体积随游戏数增长，警戒线为单行 >64KB
 > （当前 6 款 × 4 字段远低于此，狼人杀为联机桌游不写成绩；弹猪乐另有独立钱包表 user_marble_profiles，不占本表；超限时拆列为游戏独立列）。
+
+## 六、测试与内测规范（环境分离 · 2026-09 起）
+
+> 配合 docs/ENVIRONMENTS.md（L0/L1/L2 概念）与 docs/DEVELOPMENT_FLOW.md（流程纪律）。
+> 占位符说明：{BETA_HOST}=内测域名、{DOMAIN}/{ORIGIN_IP}=生产入口；真实值见本机 local/ENV.md。
+
+1. **环境与数据**：游戏相关测试动作（云存档、兑换、对局、领奖、清库实验）一律发生在 L1 内测环境（独立库/API/静态目录）；生产环境只允许金丝雀账号**只读**巡检（health/登录/GET），生产库禁止任何游戏写操作验证。
+2. **QA 钩子宿主门禁**：游戏自动测试钩子（现弹猪乐 `?qa=1&token=`）仅在 {BETA_HOST} 与 localhost/127.0.0.1 主机名放行；生产主机名（{DOMAIN}、{ORIGIN_IP}）代码层忽略。门禁纯函数与单测：`app/src/games/qa-gate.js`（qaAllowedByHost）；移植新游戏时把同一逻辑内联进其适配层，注释互指（与 secureStore 两端同步模式一致）。
+3. **新游戏接入 QA 检查单**：
+   - 本机：`127.0.0.1:8124` 静态调试（访客本地模式 + localhost QA 钩子）；
+   - L1：同步到内测目录 → 内测库注册测试号 → 云存档/兑换/对局 E2E（断言写进 qbao_beta）；
+   - L2：仅静态检查 + 金丝雀只读巡检；
+   - 缓存：生产静态 7 天缓存 → 游戏 js 变更时同步更新入口页引用版本参数 ?v= 并提醒强刷（内测不缓存无此问题）。
+4. **冒烟入口**：`scripts/qa/smoke-stage.ps1 -Env beta|prod`，游戏专项断言随接入补齐（弹猪乐 API E2E 为样板）。
+5. **迁移与白名单**：游戏数据表/字段走 `server/sql/` 编号迁移（先内测库、验收后生产库）；gameId 白名单更新须同时改 games.schema 与 gamesManifest（CI 断言防漂移）。
+6. **授权与来源**：外接游戏的上游/授权/端口配方记录在 SOURCE.md / PORT.md；QA 门禁与内测规范属于移植交付的一部分。

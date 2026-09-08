@@ -116,6 +116,7 @@ cd desktop && npm ci && npm run dev                # Electron 窗口
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 开发工作流、隐私分离规则、诊断脚本 |
 | [docs/DEVELOPMENT_FLOW.md](docs/DEVELOPMENT_FLOW.md) | 发布流程唯一事实源 + DoD 检核表 |
 | [docs/MOBILE_UX.md](docs/MOBILE_UX.md) | 移动端交互规范与真机验收清单 |
+| [docs/ENVIRONMENTS.md](docs/ENVIRONMENTS.md) | 环境与网络地图：L0/L1/L2 隔离、内测入口与 FAQ |
 | [docs/REVIEW-2026-09.md](docs/REVIEW-2026-09.md) | 项目全貌与专业点评（2026-09） |
 | [CONTRIBUTING.md](CONTRIBUTING.md) / [SECURITY.md](SECURITY.md) | 贡献指南 / 安全政策 |
 
