@@ -71,6 +71,7 @@ function createApp() {
   require('./src/routes/desktop.routes')(app);
   require('./src/routes/apps.routes')(app);
   require('./src/routes/games.routes')(app);
+  require('./src/routes/marble.routes')(app);
 
   // 统一兜底：404 + 全局错误处理（必须最后注册）
   app.use(notFoundHandler);

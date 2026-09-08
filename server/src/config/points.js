@@ -23,6 +23,15 @@ module.exports = {
   AI_UPLOAD_OVER_COST: 1,        // 超出后每次扣分
   AI_TASK_USER_LIMIT: 3,         // 每用户同时 queued+running 的 AI 任务上限（防占满串行 worker）
 
+  // —— 弹猪乐（游戏空间）：积分 ⇄ 弹珠（账号云端存档，服务端权威） ——
+  MARBLE_EXCHANGE_RATE: 10,             // 1 积分 = 10 弹珠（双向同价）
+  MARBLE_OUT_DAILY_CAP_POINTS: 20,      // 弹珠 → 积分 每日兑换上限（分，按台账 SUM 截断）
+  MARBLE_WIN_DAILY_CAP_MARBLES: 2000,   // 单日命中赢取弹珠上限（防脚本铸币）
+  MARBLE_WIN_DAILY_CAP_DIAMONDS: 40,    // 单日命中赢得钻石上限（= 2000/50）
+  MARBLE_FREE_CLAIMS_DAILY: 2,          // 每日免费领取弹珠次数
+  MARBLE_FREE_AMOUNT: 50,               // 每次免费领取颗数
+  MARBLE_START_MARBLES: 1000,           // 弹珠账户初始赠送
+
   // —— 学期清零 ——
   EXPIRY_NOTIFY_DAYS: 7,         // 清零前 N 天开始通知
   EXPIRY_DATES: [                // 按 月/日 排序；每年这两日 00:00 清零
@@ -72,6 +81,8 @@ module.exports = {
     file_extend: '文件池续期',
     roulette_bet: '轮盘押注',
     roulette_win: '轮盘赢彩',
+    marble_in: '积分兑换弹珠',      // 弹猪乐：Qbao 积分 → 弹珠（固定汇率）
+    marble_out: '弹珠兑换积分',     // 弹猪乐：弹珠 → Qbao 积分（每日上限见上）
     admin_adjust: '管理员调整',
     expiry_reset: '学期积分清零',
   },
