@@ -1,5 +1,5 @@
 // ============================================================
-// gamesManifest.js — 游戏空间清单（v3.38）
+// gamesManifest.js — 游戏空间清单（v3.40）
 // 与 server/src/schemas/games.schema.js 的 GAME_IDS 保持一致；
 // CI 冒烟用它断言 app/dist/games 产物齐全。
 // ============================================================
@@ -59,6 +59,17 @@ export const GAMES = [
     license: 'MIT',
     upstream: 'xiong35/werewolf',
     commit: '26a77c0',
+  },
+  {
+    id: 'marble',
+    name: '弹猪乐',
+    tag: '休闲',
+    desc: '单球高尔顿板弹珠机：投入弹珠、随机倍率亮灯，命中亮灯槽即得投入×倍率；登录后云端存档，弹珠可与 Qbao 积分双向兑换（1 积分 = 10 弹珠，每日限额）。',
+    src: 'games/marble/index.html',
+    kb: 439,
+    license: '个人授权',
+    upstream: 'anshang1766/marble-wx-game',
+    commit: '71f43f9',
   },
 ]
 

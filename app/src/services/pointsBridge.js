@@ -7,7 +7,7 @@
 // 当前实现：校验入参 + 拒绝执行 + 留痕，绝不产生任何积分变动。
 // ============================================================
 
-const VALID_GAME_IDS = ['2048', 'froggy', 'gridgarden', 'tetris']
+const VALID_GAME_IDS = ['2048', 'froggy', 'gridgarden', 'tetris', 'marble']
 
 /**
  * 提交游戏事件（v0：仅校验与留痕，不产生积分）。

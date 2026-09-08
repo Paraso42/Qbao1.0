@@ -139,6 +139,13 @@
     <span class="meta"><span class="tag party">派对</span><span class="score"></span></span>
     <span class="go">开始游戏</span>
   </a>
+  <a class="card" href="./marble/index.html" data-id="marble">
+    <span class="icon">🐷</span>
+    <h2>弹猪乐</h2>
+    <p>单球高尔顿板弹珠机：投入弹珠、随机倍率亮灯，命中亮灯槽即得投入×倍率奖励。登录后云端存档，弹珠可与 Qbao 积分双向兑换（1 积分 = 10 弹珠，每日限额）。</p>
+    <span class="meta"><span class="tag fun">休闲</span><span class="score"></span></span>
+    <span class="go">开始游戏</span>
+  </a>
 
 </main>
 <footer>
@@ -149,9 +156,10 @@
 <script src="./common/qbao-hook.js"></script>
 <script>
 (function () {
-  var NAME = { '2048': '最佳分数', froggy: '通关进度', gridgarden: '通关进度', tetris: '最佳分数' };
+  var NAME = { '2048': '最佳分数', froggy: '通关进度', gridgarden: '通关进度', tetris: '最佳分数', marble: '最佳单局' };
   function fmt(id, g) {
     if (!g) return '';
+    if (id === 'marble') return (g.best || 0) + ' 颗 · ' + (g.plays || 0) + ' 次';
     if (id === '2048' || id === 'tetris') return (g.best || 0) + ' 分 · ' + (g.plays || 0) + ' 次';
     return (g.level || 0) + '/' + (id === 'froggy' ? 24 : 28) + ' 关 · ' + (g.plays || 0) + ' 次';
   }

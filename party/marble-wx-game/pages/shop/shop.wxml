@@ -1,0 +1,27 @@
+<view class="shop-page">
+  <view class="shop-summary">
+    <text class="summary-label">我的弹珠</text>
+    <text class="summary-value">{{marbles}}</text>
+  </view>
+
+  <view class="section-head">
+    <text class="section-title">弹珠外观</text>
+    <text class="section-count">已拥有 {{ownedCount}} / {{items.length}}</text>
+  </view>
+
+  <view class="shop-list">
+    <view wx:for="{{items}}" wx:key="id" class="shop-item {{item.equipped ? 'equipped' : ''}}">
+      <view class="preview-wrap">
+        <view wx:if="{{item.trail}}" class="trail" style="background: {{item.trail}};"></view>
+        <view class="skin-preview" style="background: {{item.color}}; border-color: {{item.edge}}; box-shadow: 0 0 22rpx {{item.trail || item.color}};"></view>
+      </view>
+      <view class="skin-info">
+        <text class="skin-name">{{item.name}}</text>
+        <text class="skin-meta">{{item.trail ? '动态尾焰弹珠' : '经典球面弹珠'}}</text>
+      </view>
+      <view class="skin-action {{item.equipped ? 'active' : ''}}" data-id="{{item.id}}" bindtap="selectSkin">
+        {{item.equipped ? '使用中' : (item.owned ? '装备' : item.price + ' 颗')}}
+      </view>
+    </view>
+  </view>
+</view>

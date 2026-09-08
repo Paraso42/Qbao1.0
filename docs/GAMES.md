@@ -1,4 +1,4 @@
-# Qbao 游戏空间（v3.38）
+# Qbao 游戏空间（v3.40）
 
 游戏门户是 Qbao 的**附属静态站点**（形态与下载站 `/dl` 一致）：独立网页 `/games/`，
 与主站同源共享登录状态，按账号保存并隔离游戏数据，为未来联机预留数据层与契约。
@@ -61,7 +61,21 @@
 - 玩法：井字棋 / 五子棋 / 黑白棋短回合制，客户端轮询 `GET /api/v1/games/rooms/:id`；
 - 鉴权/限流/隔离全部沿用现有体系；「单行状态 + 追加移动」设计天然支持回放。
 
-## 五、积分对接（v0 预留，未生效）
+## 五、积分对接（v1 已落地：弹珠游戏「弹猪乐」）
+
+弹猪乐（marble，同学自研微信小游戏 Web 移植，个人授权）是首个打通「游戏 ↔ Qbao 积分」的游戏；
+其余游戏仍只记录成绩（user_games_stats），不产生积分。
+
+### v1 已落地能力
+
+- 云存档：登录账号的弹珠/钻石余额、皮肤/拖尾/光环归属与装备存 `user_marble_profiles`（迁移 017），**服务端权威**（本地无法篡改/重置刷）；游客自动回退 localStorage 本地模式（成绩照常按账号上报 best/plays）。
+- 对局：`POST /api/v1/games/marble/round/start` 扣押珠并由**服务端随机倍率（×2/×3/×5/×10）与亮灯槽位** → 客户端做物理表现 → `round/result` 上报落槽，服务端判定输赢。`user_marble_rounds` 保证单开一局（防双重结算/重放），10 分钟未结算自动退回押珠。
+- 积分双向兑换（固定汇率、双向同价）：**1 积分 = 10 弹珠**。台账 reason `marble_in`（积分→弹珠，随余额花费）与 `marble_out`（弹珠→积分，**每日上限 20 分**，按当日台账 SUM 截断）；`GET /points/rules` 与积分页自动展示新规则。
+- 防刷/防铸币：命中赢取单日上限 2000 弹珠 + 40 钻石（超限部分不发）；每日免费领取 2 × 50 弹珠（防无珠可玩）；商城购买/装备全部走服务端校验价格与余额。
+- 合规边界（延续 roulette 下架整改）：随机输赢只作用于弹珠/钻石（纯虚拟道具），**积分不参与任何押注/输赢**，只做固定汇率兑换；兑换全程台账留痕、可审计、随学期清零。
+- 实现文件：server `routes/marble.routes.js`、`services/marbleService.js`、`schemas/marble.schema.js`、`config/points.js`（MARBLE_* 常量）、迁移 `sql/017_v3.40_marble.sql`；客户端 `app/public/games/marble/`（webwx.js 适配层/云桥 + 上游 game.js 补丁，见 `marble/SOURCE.md` 与 `party/marble-wx-game/web-port/`）；测试 `server/test/marble.routes.test.js`（22 例，假池）。
+
+### 通用游戏事件（v0 预留，未生效）
 
 ### 其余游戏事件（v0 预留，未生效）
 
@@ -73,4 +87,4 @@
   契约 v1 以 refType=game 扩展 points/claims。
 
 > 长线观察项：user_games_stats 单行 JSONB 体积随游戏数增长，警戒线为单行 >64KB
-> （当前 5 款 × 4 字段远低于此，狼人杀为联机桌游不写成绩；超限时拆列为游戏独立列）。
+> （当前 6 款 × 4 字段远低于此，狼人杀为联机桌游不写成绩；弹猪乐另有独立钱包表 user_marble_profiles，不占本表；超限时拆列为游戏独立列）。

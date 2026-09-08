@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>弹猪乐</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #150f14; overflow: hidden; }
+  body { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #qbBoot { position: fixed; inset: 0; z-index: 2147483400; display: flex; align-items: center; justify-content: center; background: #150f14; color: #f2e9dd; font: 600 15px/1.6 system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; letter-spacing: 1px; }
+  .qb-toast { position: fixed; left: 50%; top: 40%; transform: translateX(-50%); background: rgba(12, 14, 18, .88); color: #fff; font: 600 14px/1.5 system-ui, sans-serif; padding: 9px 16px; border-radius: 999px; z-index: 2147483100; max-width: 76vw; text-align: center; opacity: 0; transition: opacity .18s; pointer-events: none; white-space: pre-line; }
+  .qb-toast.show { opacity: 1; }
+  .qb-modal-mask { position: fixed; inset: 0; background: rgba(5, 8, 12, .6); display: flex; align-items: center; justify-content: center; z-index: 2147483200; }
+  .qb-modal { width: min(320px, 86vw); background: #151a20; border: 1px solid #39424d; border-radius: 14px; padding: 22px 18px; color: #f4f1e8; font-family: system-ui, sans-serif; box-shadow: 0 18px 60px rgba(0, 0, 0, .5); }
+  .qb-modal-title { font-size: 17px; font-weight: 800; margin-bottom: 10px; text-align: center; }
+  .qb-modal-desc { font-size: 13.5px; color: #c6ccd2; line-height: 1.7; white-space: pre-line; word-break: break-word; }
+  .qb-modal-btns { display: flex; gap: 10px; margin-top: 18px; }
+  .qb-modal-btns button { flex: 1; height: 38px; border: 0; border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .qb-modal-btns .primary { background: #f2f0e9; color: #111318; }
+  .qb-modal-btns .ghost { background: #2a3038; color: #aab2bd; }
+  #qbMarbleChip { position: fixed; top: calc(8px + env(safe-area-inset-top)); right: 10px; z-index: 2147483001; display: flex; align-items: center; gap: 6px; background: rgba(10, 16, 28, .72); border: 1px solid rgba(255, 211, 90, .35); color: #ffd35a; font: 700 11.5px/1.4 system-ui, sans-serif; padding: 5px 10px; border-radius: 999px; backdrop-filter: blur(4px); cursor: pointer; user-select: none; max-width: 55vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #qbMarbleChip .dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; flex: none; }
+  #qbMarbleChip.guest .dot { background: #94a3b8; }
+</style>
+</head>
+<body>
+<div id="qbBoot">🎱 弹猪乐加载中…</div>
+<div id="qbMarbleChip" class="guest"><span class="dot"></span><span id="qbMarbleChipText">加载中…</span></div>
+<script>window.__QBAO_GAME_ID__ = 'marble';</script>
+<script src="../common/qbao-hook.js"></script>
+<script src="matter.js"></script>
+<script src="webwx.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
