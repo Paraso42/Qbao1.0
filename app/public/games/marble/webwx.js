@@ -212,10 +212,14 @@ function finishReady(seed) {
   bridge._flush();
 }
 function boot() {
+  // QA 后门（仅 ?qa=1&token=... 显式启用）：把测试令牌写入 localStorage（qbao-hook 会读取）
+  try {
+    var qs = new URLSearchParams(location.search);
+    if (qs.get('qa') === '1' && qs.get('token')) localStorage.setItem('qbao_token', qs.get('token'));
+  } catch (e) { /* ignore */ }
   if (!hook || !hook.getSession) { finishReady(null); tryStartQA(); return; }
   hook.getSession(function (s) {
     bridge._token = s && s.token ? String(s.token) : null;
-    if (!bridge._token) { finishReady(null); tryStartQA(); return; }
     bridge.mode = 'cloud';
     bridge.refresh().then(function () {
       finishReady(bridge.seed);
@@ -230,7 +234,7 @@ function boot() {
   });
 }
 function tryStartQA() {
-  if (bridge.mode !== 'guest') return;
+  // 游客与云存档（登录态）都可自动冒烟；云模式会真实走 开局→结算 API
   if (!/qa=1/.test(location.search)) return;
   setTimeout(function () {
     var W = window.innerWidth;

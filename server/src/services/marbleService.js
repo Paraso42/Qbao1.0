@@ -120,7 +120,7 @@ async function startRound(db, userId, wager) {
   }
   const dec = await db.query(
     'UPDATE user_marble_profiles SET marbles = marbles - $2, updated_at = NOW() WHERE user_id = $1 AND marbles >= $2 RETURNING marbles',
-    [userId, wager, wager]
+    [userId, wager]
   );
   if (dec.rows.length === 0) throw new ApiError(400, '弹珠不足');
   const roll = rollMultiplier();
