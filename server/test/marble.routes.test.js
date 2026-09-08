@@ -1,7 +1,8 @@
 'use strict';
 
 // marble 路由测试：弹珠云存档 API（profile/round/exchange/purchase/free-claim）
-// 用可控假池模拟 user_marble_profiles 与 user_marble_rounds 状态机，不触真实数据库。
+// 经济模型（2026-09 定版）：积分→弹珠 1:10 单向无上限；命中奖励（弹珠+钻石）无上限；
+// 钻石→积分 1 钻 = 2 分，每日最多 50 分（按台账 SUM 截断）。
 
 const request = require('supertest');
 const { installFakePool } = require('./helpers');
@@ -14,8 +15,6 @@ function freshSim() {
     diamonds: 0,
     data: { owned: { skins: [0], bgs: [0], trails: [0], halos: [0] }, equipped: { skin: 0, bg: 0, trail: 0, halo: 0 } },
     freeClaims: 0,
-    winM: 0,
-    winD: 0,
     points: 100,
     outUsed: 0,
     open: null,
@@ -24,15 +23,14 @@ function freshSim() {
 
 // 按 SQL 特征构造假池处理器（顺序敏感：先专后泛）
 function makeMatchers(sim) {
-  const add = (re, fn) => matchers.push([re, fn]);
   const matchers = [];
+  const add = (re, fn) => matchers.push([re, fn]);
 
   add(/SELECT is_banned FROM users/, async () => ({ rows: [] }));
   add(/INSERT INTO points_ledger/, async (sql, prm) => {
-    if (prm[3] === 'marble_out') sim.outUsed += prm[1]; // 台账即弹珠→积分日上限依据
+    if (prm[3] === 'marble_diamond_out') sim.outUsed += prm[1]; // 台账即钻石→积分日上限依据
     return { rowCount: 1 };
   });
-  add(/SELECT win_marbles, win_diamonds FROM/, async () => ({ rows: [{ win_marbles: sim.winM, win_diamonds: sim.winD }] }));
   add(/COALESCE\(SUM\(delta\)/, async () => ({ rows: [{ s: sim.outUsed }] }));
   add(/SELECT storage_points FROM users WHERE id/, async () => ({ rows: [{ storage_points: sim.points }] }));
   add(/UPDATE users SET storage_points = storage_points - /, async (sql, p) => {
@@ -46,7 +44,6 @@ function makeMatchers(sim) {
   });
   add(/INSERT INTO user_marble_profiles/, async () => ({ rowCount: 0 }));
   add(/UPDATE user_marble_profiles SET free_date/, async () => ({ rowCount: 0 }));
-  add(/UPDATE user_marble_profiles SET win_date/, async () => ({ rowCount: 0 }));
   // 过期对局清理：测试中默认无过期对局
   add(/created_at < NOW/, async () => ({ rows: [] }));
   // 结算：按 id 删除未结算对局
@@ -63,9 +60,9 @@ function makeMatchers(sim) {
     sim.open = { id: '11111111-1111-4111-8111-111111111111', wager: p[1], multiplier: p[2], lit: p[3] };
     return { rows: [{ id: sim.open.id }] };
   });
-  // 档案读取（先 6 列后 3 列后单列）
-  add(/SELECT marbles, diamonds, data, free_claims, win_marbles, win_diamonds/, async () => ({
-    rows: [{ marbles: sim.marbles, diamonds: sim.diamonds, data: sim.data, free_claims: sim.freeClaims, win_marbles: sim.winM, win_diamonds: sim.winD }],
+  // 档案读取（先 4 列后 3 列后单列）
+  add(/SELECT marbles, diamonds, data, free_claims/, async () => ({
+    rows: [{ marbles: sim.marbles, diamonds: sim.diamonds, data: sim.data, free_claims: sim.freeClaims }],
   }));
   add(/SELECT marbles, diamonds, data FROM user_marble_profiles/, async () => ({
     rows: [{ marbles: sim.marbles, diamonds: sim.diamonds, data: sim.data }],
@@ -97,11 +94,10 @@ function makeMatchers(sim) {
     sim.marbles += p[1];
     return { rows: [{ marbles: sim.marbles, free_claims: sim.freeClaims }] };
   });
-  add(/win_marbles = win_marbles/, async (sql, p) => {
+  // 命中入账：弹珠 + 钻石 同一条 UPDATE
+  add(/marbles = marbles \+ \$2, diamonds = diamonds \+ \$3/, async (sql, p) => {
     sim.marbles += p[1];
-    sim.winM += p[1];
     sim.diamonds += p[2];
-    sim.winD += p[2];
     return { rowCount: 1 };
   });
   add(/marbles = marbles \+ \$2/, async (sql, p) => {
@@ -135,7 +131,7 @@ describe('marble 鉴权', () => {
   ])('%s %s 未登录 → 401', async (method, url) => {
     const app = boot(freshSim());
     const res = await request(app)[method.toLowerCase()](url)
-      .send(method === 'GET' ? {} : { wager: 10, roundId: ROUND_ID, slot: 0, dir: 'in', marbles: 100, cat: 'skins', idx: 1 });
+      .send(method === 'GET' ? {} : { wager: 10, roundId: ROUND_ID, slot: 0, action: 'points2marbles', amount: 100, cat: 'skins', idx: 1 });
     expect(res.status).toBe(401);
   });
 });
@@ -155,8 +151,9 @@ describe('marble 档案与对局', () => {
     expect(res.body.marbles).toBe(1000);
     expect(res.body.diamonds).toBe(0);
     expect(res.body.exchangeRate).toBe(10);
-    expect(res.body.dailyOutCap).toBe(20);
-    expect(res.body.dailyOutLeft).toBe(20);
+    expect(res.body.diamondToPoints).toBe(2);
+    expect(res.body.diamondOutCap).toBe(50);
+    expect(res.body.diamondOutLeft).toBe(50);
     expect(res.body.freeLeft).toBe(2);
     expect(res.body.pointsBalance).toBe(100);
     expect(res.body.owned.skins).toEqual([0]);
@@ -224,17 +221,31 @@ describe('marble 档案与对局', () => {
     expect(again.status).toBe(400);
   });
 
-  it('赢取单日上限生效：已达 2000 → 命中不再入账（capped）', async () => {
-    const sim = freshSim();
-    sim.winM = 2000;
-    const app = boot(sim);
-    const start = await auth(request(app).post('/api/v1/games/marble/round/start')).send({ wager: 10 });
-    const res = await auth(request(app).post('/api/v1/games/marble/round/result')).send({ roundId: start.body.roundId, slot: start.body.lit[0] });
+  it('命中奖励不设上限：wager 全额入账 + 钻石按每 50 折算', async () => {
+    const app = boot(freshSim());
+    const start = await auth(request(app).post('/api/v1/games/marble/round/start')).send({ wager: 100 });
+    const slot = start.body.lit[0];
+    const res = await auth(request(app).post('/api/v1/games/marble/round/result')).send({ roundId: start.body.roundId, slot });
     expect(res.status).toBe(200);
     expect(res.body.won).toBe(true);
-    expect(res.body.capped).toBe(true);
-    expect(res.body.reward).toBe(0);
-    expect(res.body.marbles).toBe(990);
+    const gross = 100 * start.body.multiplier;
+    expect(res.body.reward).toBe(gross);
+    expect(res.body.marbles).toBe(900 + gross);
+    expect(res.body.diamonds).toBe(Math.floor(gross / 50));
+  });
+
+  it('连胜连赢不封顶：多局命中全部入账', async () => {
+    const sim = freshSim();
+    sim.marbles = 100000;
+    const app = boot(sim);
+    let total = 0;
+    for (let i = 0; i < 3; i += 1) {
+      const start = await auth(request(app).post('/api/v1/games/marble/round/start')).send({ wager: 50 });
+      const res = await auth(request(app).post('/api/v1/games/marble/round/result')).send({ roundId: start.body.roundId, slot: start.body.lit[0] });
+      expect(res.status).toBe(200);
+      total += res.body.reward;
+    }
+    expect(sim.marbles).toBe(100000 - 150 + total);
   });
 });
 
@@ -246,36 +257,63 @@ describe('marble 兑换/商城/免费领取', () => {
   });
   const auth = (r) => r.set('Authorization', 'Bearer ' + token);
 
-  it('exchange in：10 积分 → 100 弹珠（1:10）', async () => {
+  it('exchange points2marbles：10 积分 → 100 弹珠（1:10，单向）', async () => {
     const app = boot(freshSim());
-    const res = await auth(request(app).post('/api/v1/games/marble/exchange')).send({ dir: 'in', marbles: 100 });
+    const res = await auth(request(app).post('/api/v1/games/marble/exchange')).send({ action: 'points2marbles', amount: 100 });
     expect(res.status).toBe(200);
     expect(res.body.marbles).toBe(1100);
     expect(res.body.pointsBalance).toBe(90);
   });
 
-  it('exchange in 积分不足 → 400', async () => {
+  it('exchange points2marbles 积分不足 → 400', async () => {
     const sim = freshSim();
     sim.points = 5;
     const app = boot(sim);
-    const res = await auth(request(app).post('/api/v1/games/marble/exchange')).send({ dir: 'in', marbles: 100 });
+    const res = await auth(request(app).post('/api/v1/games/marble/exchange')).send({ action: 'points2marbles', amount: 100 });
     expect(res.status).toBe(400);
   });
 
-  it('exchange out：100 弹珠 → 10 积分；再次兑换超出日上限 → 400', async () => {
-    const app = boot(freshSim());
-    const ok = await auth(request(app).post('/api/v1/games/marble/exchange')).send({ dir: 'out', marbles: 100 });
-    expect(ok.status).toBe(200);
-    expect(ok.body.marbles).toBe(900);
-    expect(ok.body.pointsBalance).toBe(110);
-    const cap = await auth(request(app).post('/api/v1/games/marble/exchange')).send({ dir: 'out', marbles: 200 });
-    expect(cap.status).toBe(400);
+  it('exchange diamonds2points：10 钻石 → 20 积分（1:2，单向）', async () => {
+    const sim = freshSim();
+    sim.diamonds = 100;
+    const app = boot(sim);
+    const res = await auth(request(app).post('/api/v1/games/marble/exchange')).send({ action: 'diamonds2points', amount: 10 });
+    expect(res.status).toBe(200);
+    expect(res.body.diamonds).toBe(90);
+    expect(res.body.pointsBalance).toBe(120);
+    expect(res.body.diamondOutLeft).toBe(30);
   });
 
-  it('exchange 数量非 10 的倍数 → 422', async () => {
+  it('exchange diamonds2points 钻石不足 → 400', async () => {
     const app = boot(freshSim());
-    const res = await auth(request(app).post('/api/v1/games/marble/exchange')).send({ dir: 'in', marbles: 15 });
-    expect(res.status).toBe(422);
+    const res = await auth(request(app).post('/api/v1/games/marble/exchange')).send({ action: 'diamonds2points', amount: 1 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('钻石不足');
+  });
+
+  it('exchange diamonds2points 每日上限 50 分：超限 → 400（含余量提示）', async () => {
+    const sim = freshSim();
+    sim.diamonds = 100;
+    sim.outUsed = 46;
+    const app = boot(sim);
+    const res = await auth(request(app).post('/api/v1/games/marble/exchange')).send({ action: 'diamonds2points', amount: 5 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('还可兑 4 积分');
+    const ok = await auth(request(app).post('/api/v1/games/marble/exchange')).send({ action: 'diamonds2points', amount: 2 });
+    expect(ok.status).toBe(200);
+    expect(ok.body.pointsBalance).toBe(104);
+    expect(ok.body.diamonds).toBe(98);
+    expect(ok.body.diamondOutLeft).toBe(0);
+    const over = await auth(request(app).post('/api/v1/games/marble/exchange')).send({ action: 'diamonds2points', amount: 1 });
+    expect(over.status).toBe(400);
+  });
+
+  it('exchange 数量非 10 的倍数 / 未知 action → 422', async () => {
+    const app = boot(freshSim());
+    const r1 = await auth(request(app).post('/api/v1/games/marble/exchange')).send({ action: 'points2marbles', amount: 15 });
+    expect(r1.status).toBe(422);
+    const r2 = await auth(request(app).post('/api/v1/games/marble/exchange')).send({ action: 'bogus', amount: 100 });
+    expect(r2.status).toBe(422);
   });
 
   it('purchase 皮肤：扣弹珠并入库/装备；再次购买同款不再扣费', async () => {

@@ -23,11 +23,14 @@ module.exports = {
   AI_UPLOAD_OVER_COST: 1,        // 超出后每次扣分
   AI_TASK_USER_LIMIT: 3,         // 每用户同时 queued+running 的 AI 任务上限（防占满串行 worker）
 
-  // —— 弹猪乐（游戏空间）：积分 ⇄ 弹珠（账号云端存档，服务端权威） ——
-  MARBLE_EXCHANGE_RATE: 10,             // 1 积分 = 10 弹珠（双向同价）
-  MARBLE_OUT_DAILY_CAP_POINTS: 20,      // 弹珠 → 积分 每日兑换上限（分，按台账 SUM 截断）
-  MARBLE_WIN_DAILY_CAP_MARBLES: 2000,   // 单日命中赢取弹珠上限（防脚本铸币）
-  MARBLE_WIN_DAILY_CAP_DIAMONDS: 40,    // 单日命中赢得钻石上限（= 2000/50）
+  // —— 弹猪乐（游戏空间）：Qbao 积分 ⇄ 弹珠/钻石（账号云端存档，服务端权威） ——
+  // 经济模型（2026-09 定版，用户确认）：积分单向换弹珠 1:10（不设上限）；
+  // 弹珠/钻石获取不设上限（对局命中即发）；钻石单向换积分 1 钻 = 2 分，
+  // 但**每日最多兑换 50 积分**（25 钻/日，按当日台账 SUM 截断）——游戏产出无上限、
+  // 兑换到积分有日上限，两者共同构成防刷边界；弹珠不可兑积分、积分不可购钻石。
+  MARBLE_EXCHANGE_RATE: 10,             // 1 积分 = 10 弹珠（单向：积分 → 弹珠，无上限）
+  MARBLE_DIAMOND_TO_POINTS: 2,          // 1 钻石 = 2 积分（单向：钻石 → 积分）
+  MARBLE_DIAMOND_OUT_DAILY_POINTS: 50,  // 钻石 → 积分 每日兑换上限（分，按台账 SUM 截断）
   MARBLE_FREE_CLAIMS_DAILY: 2,          // 每日免费领取弹珠次数
   MARBLE_FREE_AMOUNT: 50,               // 每次免费领取颗数
   MARBLE_START_MARBLES: 1000,           // 弹珠账户初始赠送
@@ -81,8 +84,8 @@ module.exports = {
     file_extend: '文件池续期',
     roulette_bet: '轮盘押注',
     roulette_win: '轮盘赢彩',
-    marble_in: '积分兑换弹珠',      // 弹猪乐：Qbao 积分 → 弹珠（固定汇率）
-    marble_out: '弹珠兑换积分',     // 弹猪乐：弹珠 → Qbao 积分（每日上限见上）
+    marble_in: '积分兑换弹珠',          // 弹猪乐：积分 → 弹珠（1 积分 = 10 弹珠，单向）
+    marble_diamond_out: '钻石兑换积分', // 弹猪乐：钻石 → 积分（1 钻石 = 2 积分，单向）
     admin_adjust: '管理员调整',
     expiry_reset: '学期积分清零',
   },

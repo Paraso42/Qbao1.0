@@ -61,24 +61,20 @@ async function ensureProfile(db, userId) {
     'UPDATE user_marble_profiles SET free_date = CURRENT_DATE, free_claims = 0 WHERE user_id = $1 AND free_date IS DISTINCT FROM CURRENT_DATE',
     [userId]
   );
-  await db.query(
-    'UPDATE user_marble_profiles SET win_date = CURRENT_DATE, win_marbles = 0, win_diamonds = 0 WHERE user_id = $1 AND win_date IS DISTINCT FROM CURRENT_DATE',
-    [userId]
-  );
 }
 
 // GET 档案（游戏启动拉取，含积分余额与兑换余量供 HUD/商城展示）
 async function getProfile(db, userId) {
   await ensureProfile(db, userId);
   const r = await db.query(
-    'SELECT marbles, diamonds, data, free_claims, win_marbles, win_diamonds FROM user_marble_profiles WHERE user_id = $1',
+    'SELECT marbles, diamonds, data, free_claims FROM user_marble_profiles WHERE user_id = $1',
     [userId]
   );
   const row = r.rows[0] || {};
   const data = Object.assign(defaultData(), row.data || {});
   data.owned = Object.assign({ skins: [0], bgs: [0], trails: [0], halos: [0] }, data.owned || {});
   data.equipped = Object.assign({ skin: 0, bg: 0, trail: 0, halo: 0 }, data.equipped || {});
-  const usedOut = await pts.sumSince(db, userId, 'marble_out', pts.localStartOfDay());
+  const usedOut = await pts.sumSince(db, userId, 'marble_diamond_out', pts.localStartOfDay());
   const pointsBalance = await pts.getBalance(db, userId);
   return {
     marbles: parseInt(row.marbles != null ? row.marbles : P.MARBLE_START_MARBLES),
@@ -88,11 +84,10 @@ async function getProfile(db, userId) {
     freeLeft: Math.max(0, P.MARBLE_FREE_CLAIMS_DAILY - (parseInt(row.free_claims) || 0)),
     freeAmount: P.MARBLE_FREE_AMOUNT,
     exchangeRate: P.MARBLE_EXCHANGE_RATE,
-    dailyOutCap: P.MARBLE_OUT_DAILY_CAP_POINTS,
-    dailyOutUsed: usedOut,
-    dailyOutLeft: Math.max(0, P.MARBLE_OUT_DAILY_CAP_POINTS - usedOut),
-    winMarblesToday: parseInt(row.win_marbles || 0),
-    winDiamondsToday: parseInt(row.win_diamonds || 0),
+    diamondToPoints: P.MARBLE_DIAMOND_TO_POINTS,
+    diamondOutCap: P.MARBLE_DIAMOND_OUT_DAILY_POINTS,
+    diamondOutUsed: usedOut,
+    diamondOutLeft: Math.max(0, P.MARBLE_DIAMOND_OUT_DAILY_POINTS - usedOut),
     pointsBalance,
   };
 }
@@ -155,31 +150,21 @@ async function settleRound(db, userId, roundId, slot) {
   const won = lit.indexOf(slot) >= 0;
   let reward = 0;
   let diamonds = 0;
-  let capped = false;
   if (won) {
-    const cur = await db.query(
-      'SELECT win_marbles, win_diamonds FROM user_marble_profiles WHERE user_id = $1',
-      [userId]
+    // 获取不设上限：命中即按 毛收益 = wager×multiplier 全额入账，钻石 = 每 50 毛收益折算 1 颗
+    reward = gross;
+    diamonds = Math.floor(gross / 50);
+    await db.query(
+      'UPDATE user_marble_profiles SET marbles = marbles + $2, diamonds = diamonds + $3, updated_at = NOW() WHERE user_id = $1',
+      [userId, reward, diamonds]
     );
-    const w = cur.rows[0] || {};
-    const capM = Math.max(0, P.MARBLE_WIN_DAILY_CAP_MARBLES - (parseInt(w.win_marbles) || 0));
-    const capD = Math.max(0, P.MARBLE_WIN_DAILY_CAP_DIAMONDS - (parseInt(w.win_diamonds) || 0));
-    reward = Math.min(gross, capM);
-    diamonds = Math.min(Math.floor(gross / 50), capD);
-    capped = reward < gross;
-    if (reward > 0 || diamonds > 0) {
-      await db.query(
-        'UPDATE user_marble_profiles SET marbles = marbles + $2, win_marbles = win_marbles + $2, diamonds = diamonds + $3, win_diamonds = win_diamonds + $3, updated_at = NOW() WHERE user_id = $1',
-        [userId, reward, diamonds]
-      );
-    }
   }
+
   const b = await db.query('SELECT marbles, diamonds FROM user_marble_profiles WHERE user_id = $1', [userId]);
   return {
     won,
     reward,
     diamonds,
-    capped,
     marbles: parseInt((b.rows[0] || {}).marbles || 0),
     diamondBalance: parseInt((b.rows[0] || {}).diamonds || 0),
   };
@@ -243,39 +228,42 @@ async function purchase(db, userId, cat, idx) {
   return Object.assign({ owned: data.owned, equipped: data.equipped }, resp);
 }
 
-// 积分 ⇄ 弹珠（1 积分 = MARBLE_EXCHANGE_RATE 弹珠，双向同价）
-async function exchange(db, userId, dir, marbles) {
-  const rate = P.MARBLE_EXCHANGE_RATE;
-  if (!Number.isInteger(marbles) || marbles < rate || marbles % rate !== 0) {
-    throw new ApiError(400, '兑换数量须为 ' + rate + ' 弹珠的整数倍');
-  }
-  const ptsMove = marbles / rate;
-  if (dir === 'in') {
-    // 积分 → 弹珠（积分可花费，上限即余额）
+// 单向兑换（经济模型 2026-09 定版）：积分 → 弹珠（1:10）与钻石 → 积分（1 钻 = 2 分）。
+// 弹珠不可兑积分；积分不可购钻石；钻石只能来自对局命中（服务端结算发钻，单日 40 颗上限）。
+async function exchange(db, userId, action, amount) {
+  if (!Number.isInteger(amount) || amount < 1) throw new ApiError(400, 'amount 非法');
+  if (action === 'points2marbles') {
+    const rate = P.MARBLE_EXCHANGE_RATE;
+    if (amount % rate !== 0 || amount < rate) throw new ApiError(400, '兑换数量须为 ' + rate + ' 弹珠的整数倍');
     await ensureProfile(db, userId);
-    const spent = await pts.spendPoints(db, userId, ptsMove, {
+    const ptsCost = amount / rate;
+    const spent = await pts.spendPoints(db, userId, ptsCost, {
       reason: 'marble_in', note: '弹珠游戏：积分兑换弹珠（1 积分 = ' + rate + ' 弹珠）',
     });
     const up = await db.query(
       'UPDATE user_marble_profiles SET marbles = marbles + $2, updated_at = NOW() WHERE user_id = $1 RETURNING marbles',
-      [userId, marbles]
+      [userId, amount]
     );
     return { pointsBalance: spent.balance, marbles: parseInt(up.rows[0].marbles) };
   }
-  // 弹珠 → 积分（每日上限截断，台账 SUM 防刷）
-  const used = await pts.sumSince(db, userId, 'marble_out', pts.localStartOfDay());
-  const left = Math.max(0, P.MARBLE_OUT_DAILY_CAP_POINTS - used);
-  if (ptsMove > left) throw new ApiError(400, '今日弹珠兑换积分已达上限（还可兑 ' + left + ' 积分）');
-  await ensureProfile(db, userId);
-  const dec = await db.query(
-    'UPDATE user_marble_profiles SET marbles = marbles - $2, updated_at = NOW() WHERE user_id = $1 AND marbles >= $2 RETURNING marbles',
-    [userId, marbles, marbles]
-  );
-  if (dec.rows.length === 0) throw new ApiError(400, '弹珠不足');
-  const aw = await pts.awardPoints(db, userId, ptsMove, {
-    reason: 'marble_out', note: '弹珠游戏：弹珠兑换积分（1 积分 = ' + rate + ' 弹珠）',
-  });
-  return { pointsBalance: aw.balance, awarded: aw.awarded, marbles: parseInt(dec.rows[0].marbles) };
+  if (action === 'diamonds2points') {
+    // 钻石 → 积分：每日最多 MARBLE_DIAMOND_OUT_DAILY_POINTS 分（按当日台账 SUM 截断）
+    const usedOut = await pts.sumSince(db, userId, 'marble_diamond_out', pts.localStartOfDay());
+    const outLeft = Math.max(0, P.MARBLE_DIAMOND_OUT_DAILY_POINTS - usedOut);
+    const ptsEarn = amount * P.MARBLE_DIAMOND_TO_POINTS;
+    if (ptsEarn > outLeft) throw new ApiError(400, '今日钻石兑换积分已达上限（还可兑 ' + outLeft + ' 积分）');
+    await ensureProfile(db, userId);
+    const dec = await db.query(
+      'UPDATE user_marble_profiles SET diamonds = diamonds - $2, updated_at = NOW() WHERE user_id = $1 AND diamonds >= $2 RETURNING diamonds',
+      [userId, amount]
+    );
+    if (dec.rows.length === 0) throw new ApiError(400, '钻石不足');
+    const aw = await pts.awardPoints(db, userId, ptsEarn, {
+      reason: 'marble_diamond_out', note: '弹珠游戏：钻石兑换积分（1 钻石 = ' + P.MARBLE_DIAMOND_TO_POINTS + ' 积分）',
+    });
+    return { pointsBalance: aw.balance, awarded: aw.awarded, diamonds: parseInt(dec.rows[0].diamonds), diamondOutLeft: Math.max(0, outLeft - ptsEarn) };
+  }
+  throw new ApiError(400, '未支持的动作');
 }
 
 module.exports = { getProfile, startRound, settleRound, claimFree, purchase, exchange };

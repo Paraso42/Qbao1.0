@@ -94,7 +94,7 @@ var bridge = window.__qbMarbleCloud = {
   ready: false,
   mode: 'guest',
   seed: null,
-  meta: { pointsBalance: 0, exchangeRate: 10, dailyOutCap: 20, dailyOutLeft: 20, freeLeft: 2, freeAmount: 50 },
+  meta: { pointsBalance: 0, exchangeRate: 10, diamondToPoints: 2, diamondOutCap: 50, diamondOutUsed: 0, diamondOutLeft: 50, freeLeft: 2, freeAmount: 50 },
   _cbs: [],
   _token: null,
   _current: null,
@@ -110,9 +110,10 @@ var bridge = window.__qbMarbleCloud = {
     this.meta = {
       pointsBalance: p.pointsBalance || 0,
       exchangeRate: p.exchangeRate || 10,
-      dailyOutCap: p.dailyOutCap || 20,
-      dailyOutUsed: p.dailyOutUsed || 0,
-      dailyOutLeft: p.dailyOutLeft != null ? p.dailyOutLeft : (p.dailyOutCap || 20) - (p.dailyOutUsed || 0),
+      diamondToPoints: p.diamondToPoints != null ? p.diamondToPoints : 2,
+      diamondOutCap: p.diamondOutCap != null ? p.diamondOutCap : 50,
+      diamondOutUsed: p.diamondOutUsed || 0,
+      diamondOutLeft: p.diamondOutLeft != null ? p.diamondOutLeft : 50,
       freeLeft: p.freeLeft != null ? p.freeLeft : 0,
       freeAmount: p.freeAmount || 50,
     };
@@ -161,10 +162,18 @@ var bridge = window.__qbMarbleCloud = {
       return r;
     });
   },
-  exchange: function (dir, marbles) {
+  exchangeP2M: function (marbles) {
     var self = this;
-    return self._request('/api/v1/games/marble/exchange', { method: 'POST', body: JSON.stringify({ dir: dir, marbles: marbles }) }).then(function (r) {
+    return self._request('/api/v1/games/marble/exchange', { method: 'POST', body: JSON.stringify({ action: 'points2marbles', amount: marbles }) }).then(function (r) {
       self.meta.pointsBalance = r.pointsBalance;
+      return r;
+    });
+  },
+  exchangeD2P: function (diamonds) {
+    var self = this;
+    return self._request('/api/v1/games/marble/exchange', { method: 'POST', body: JSON.stringify({ action: 'diamonds2points', amount: diamonds }) }).then(function (r) {
+      self.meta.pointsBalance = r.pointsBalance;
+      self.meta.diamondOutLeft = r.diamondOutLeft != null ? r.diamondOutLeft : self.meta.diamondOutLeft;
       return r;
     });
   },

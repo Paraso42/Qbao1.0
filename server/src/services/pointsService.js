@@ -347,13 +347,13 @@ function getRules() {
       { reason: 'quiz_answer', label: P.REASON_LABELS.quiz_answer, points: P.QUIZ_CORRECT_POINTS + '/题', desc: '每答对 1 道客观题 +' + P.QUIZ_CORRECT_POINTS + ' 分，每日上限 ' + P.QUIZ_DAILY_CAP + ' 分（轮次完成时结算）', once: false },
       { reason: 'achievement', label: P.REASON_LABELS.achievement, points: '10~200', desc: '解锁成就自动领取，每个成就一次', once: true },
       { reason: 'share_download', label: P.REASON_LABELS.share_download, points: P.SHARE_DOWNLOAD_POINTS, desc: '分享的题库每被他人下载一次 +' + P.SHARE_DOWNLOAD_POINTS + '，单库封顶 +' + P.SHARE_BANK_CAP, once: false },
-      { reason: 'marble_out', label: P.REASON_LABELS.marble_out, points: '1 积分/' + P.MARBLE_EXCHANGE_RATE + ' 弹珠', desc: '弹珠游戏（弹猪乐）：弹珠兑换积分（' + P.MARBLE_EXCHANGE_RATE + ' 弹珠 = 1 积分），每日上限 ' + P.MARBLE_OUT_DAILY_CAP_POINTS + ' 分', once: false },
+      { reason: 'marble_diamond_out', label: P.REASON_LABELS.marble_diamond_out, points: P.MARBLE_DIAMOND_TO_POINTS + ' 积分/钻石', desc: '弹珠游戏（弹猪乐）：钻石兑换积分（1 钻石 = ' + P.MARBLE_DIAMOND_TO_POINTS + ' 积分）。钻石只能通过对局命中获得（每 50 毛收益折算 1 颗，获取无上限），每日最多兑换 ' + P.MARBLE_DIAMOND_OUT_DAILY_POINTS + ' 积分', once: false },
     ],
     spend: [
       { reason: 'file_extend', label: P.REASON_LABELS.file_extend, points: P.FILE_EXTEND_COST, desc: '延长文件池保存 ' + P.FILE_EXTEND_DAYS + ' 天（' + P.FILE_EXTEND_COST + ' 积分/' + P.FILE_EXTEND_DAYS + '天）' },
       { reason: 'ai_generate', label: P.REASON_LABELS.ai_generate, points: P.AI_OVER_COST, desc: 'AI 出题每日免费 ' + P.AI_FREE_DAILY + ' 次，超出后每次 ' + P.AI_OVER_COST + ' 积分' },
       { reason: 'ai_upload', label: P.REASON_LABELS.ai_upload, points: P.AI_UPLOAD_OVER_COST, desc: 'AI 文件解析每日免费 ' + P.AI_UPLOAD_FREE_DAILY + ' 次，超出后每次 ' + P.AI_UPLOAD_OVER_COST + ' 积分' },
-      { reason: 'marble_in', label: P.REASON_LABELS.marble_in, points: '1 积分/' + P.MARBLE_EXCHANGE_RATE + ' 弹珠', desc: '弹珠游戏（弹猪乐）：积分兑换弹珠（1 积分 = ' + P.MARBLE_EXCHANGE_RATE + ' 弹珠）' },
+      { reason: 'marble_in', label: P.REASON_LABELS.marble_in, points: '1 积分/' + P.MARBLE_EXCHANGE_RATE + ' 弹珠', desc: '弹珠游戏（弹猪乐）：积分兑换弹珠（1 积分 = ' + P.MARBLE_EXCHANGE_RATE + ' 弹珠，单向；弹珠不可再兑回积分）' },
     ],
     expiry: {
       dates: P.EXPIRY_DATES,

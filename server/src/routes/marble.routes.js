@@ -34,9 +34,9 @@ module.exports = function (app) {
     res.json(await svc.settleRound(pool, req.userId, req.body.roundId, req.body.slot));
   }));
 
-  // POST /api/v1/games/marble/exchange — 积分 ⇄ 弹珠（1 积分 = 10 弹珠，双向同价）
+  // POST /api/v1/games/marble/exchange — 单向兑换：points2marbles（积分→弹珠 1:10）/ diamonds2points（钻石→积分 1:2）
   app.post('/api/v1/games/marble/exchange', validate({ body: exchangeSchema }), requireAuth, asyncHandler(async (req, res) => {
-    res.json(await svc.exchange(pool, req.userId, req.body.dir, req.body.marbles));
+    res.json(await svc.exchange(pool, req.userId, req.body.action, req.body.amount));
   }));
 
   // POST /api/v1/games/marble/purchase — 商城购买/装备（皮肤/背景/拖尾/光环/钻石换弹珠）

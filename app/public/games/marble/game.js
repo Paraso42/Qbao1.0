@@ -203,7 +203,7 @@ function drawCabinetBg() {
   [[.1,.24,26,'rgba(255,255,255,.18)'],[.78,.2,30,'rgba(255,139,186,.15)'],[.2,.73,23,'rgba(255,181,74,.15)'],[.65,.78,30,'rgba(131,202,255,.13)'],[.9,.58,22,'rgba(255,198,89,.15)']].forEach((s) => { const x = field.x + field.w * s[0], y = field.y + field.h * s[1], g = ctx.createRadialGradient(x, y, 1, x, y, s[2]); g.addColorStop(0, s[3]); g.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, s[2], 0, Math.PI * 2); ctx.fill(); }); ctx.restore();
   roundedRectPath(field.x, field.y, field.w, field.h, 23); ctx.strokeStyle = 'rgba(189,75,73,.76)'; ctx.lineWidth = 4; ctx.stroke(); roundedRectPath(field.x + 7, field.y + 7, field.w - 14, field.h - 14, 18); ctx.strokeStyle = 'rgba(255,247,206,.82)'; ctx.lineWidth = 2; ctx.stroke();
   roundedRectPath(header.x, header.y, header.w, header.h, 24); const marquee = ctx.createLinearGradient(0, header.y, 0, header.y + header.h); marquee.addColorStop(0, '#4b205c'); marquee.addColorStop(.55, '#28153f'); marquee.addColorStop(1, '#150d29'); ctx.fillStyle = marquee; ctx.fill(); ctx.shadowColor = 'rgba(255,63,193,.8)'; ctx.shadowBlur = 12; ctx.strokeStyle = 'rgba(255,167,222,.82)'; ctx.lineWidth = 2; ctx.stroke(); ctx.shadowBlur = 0;
-  const cardW = Math.min(108, width * .28); roundedRectPath(header.x + 8, header.y + 8, cardW, header.h - 16, 17); ctx.fillStyle = 'rgba(42,22,55,.55)'; ctx.strokeStyle = 'rgba(255,204,237,.48)'; ctx.lineWidth = 1.5; ctx.fill(); ctx.stroke(); ctx.textAlign = 'left'; ctx.fillStyle = '#fff5fb'; ctx.font = 'bold ' + Math.max(12, Math.min(16, width * .043)) + 'px sans-serif'; ctx.fillText('弹珠', header.x + 17, header.y + 24); ctx.font = 'bold ' + Math.max(16, Math.min(21, width * .055)) + 'px sans-serif'; ctx.fillStyle = '#fffdf8'; ctx.font = 'bold ' + Math.max(13, Math.min(17, width * .044)) + 'px sans-serif'; ctx.fillText(String(state.marbles), header.x + 17, header.y + 42); ctx.font = 'bold ' + Math.max(12, Math.min(16, width * .043)) + 'px sans-serif'; ctx.fillStyle = '#5de8ff'; ctx.fillText('钻石', header.x + 17, header.y + 60); ctx.fillStyle = '#fffdf8'; ctx.fillText(String(state.diamonds), header.x + 53, header.y + 60); ctx.textAlign = 'center'; ctx.shadowColor = 'rgba(255,49,207,.95)'; ctx.shadowBlur = 18; ctx.fillStyle = '#211525'; ctx.font = 'bold ' + Math.max(26, Math.min(39, width * .105)) + 'px sans-serif'; ctx.fillText('\u5f39\u73e0\u723d', width / 2, header.y + header.h * .67); ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(255,132,228,.92)'; ctx.lineWidth = 1; ctx.strokeText('\u5f39\u73e0\u723d', width / 2, header.y + header.h * .67);
+  const cardW = Math.min(108, width * .28); roundedRectPath(header.x + 8, header.y + 8, cardW, header.h - 16, 17); ctx.fillStyle = 'rgba(42,22,55,.55)'; ctx.strokeStyle = 'rgba(255,204,237,.48)'; ctx.lineWidth = 1.5; ctx.fill(); ctx.stroke(); ctx.textAlign = 'left'; ctx.fillStyle = '#fff5fb'; ctx.font = 'bold ' + Math.max(12, Math.min(16, width * .043)) + 'px sans-serif'; ctx.fillText('弹珠', header.x + 17, header.y + 24); ctx.font = 'bold ' + Math.max(16, Math.min(21, width * .055)) + 'px sans-serif'; ctx.fillStyle = '#fffdf8'; ctx.font = 'bold ' + Math.max(13, Math.min(17, width * .044)) + 'px sans-serif'; ctx.fillText(String(state.marbles), header.x + 17, header.y + 42); ctx.font = 'bold ' + Math.max(12, Math.min(16, width * .043)) + 'px sans-serif'; ctx.fillStyle = '#5de8ff'; ctx.fillText('钻石', header.x + 17, header.y + 60); ctx.fillStyle = '#fffdf8'; ctx.fillText(String(state.diamonds), header.x + 53, header.y + 60); ctx.textAlign = 'center'; ctx.shadowColor = 'rgba(255,49,207,.95)'; ctx.shadowBlur = 18; ctx.fillStyle = '#211525'; ctx.font = 'bold ' + Math.max(26, Math.min(39, width * .105)) + 'px sans-serif'; ctx.fillText('\u5f39\u732a\u4e50', width / 2, header.y + header.h * .67); ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(255,132,228,.92)'; ctx.lineWidth = 1; ctx.strokeText('\u5f39\u732a\u4e50', width / 2, header.y + header.h * .67);
   
   const lampY = header.y + header.h - 8, count = 20, tick = Date.now() / 260; for (let i = 0; i < count; i += 1) { const x = header.x + 128 + i * ((header.w - 164) / Math.max(1, count - 1)), a = .3 + .7 * (.5 + .5 * Math.sin(tick + i * .56)); ctx.fillStyle = i % 3 === 0 ? 'rgba(255,41,152,' + a + ')' : (i % 3 === 1 ? 'rgba(55,203,238,' + a + ')' : 'rgba(174,123,255,' + a + ')'); ctx.beginPath(); ctx.arc(x, lampY, 2.7, 0, Math.PI * 2); ctx.fill(); }
   ctx.restore();
@@ -296,9 +296,9 @@ function drawShop() {
   section('光环（钻石购买）');
   halos.forEach((h, i) => { const active = state.halo === i, has = state.owned.halos.indexOf(i) >= 0; const sub = active ? '使用中' : (has ? '点击装备' : (h.cost ? h.cost + ' 钻石' : '免费')); item(h.name, sub, active, 'halo', i); });
   if (cloudOn()) {
-    section('Qbao 积分 ⇄ 弹珠（1 积分 = ' + CLOUD.meta.exchangeRate + ' 弹珠）');
+    section('Qbao 兑换（1 积分 = 10 弹珠 · 1 钻石 = 2 积分）');
     item('10 积分 → 100 弹珠', '点击兑换', false, 'exchangeIn', 0);
-    item('100 弹珠 → 10 积分', '今日可兑 ' + CLOUD.meta.dailyOutLeft + '/' + CLOUD.meta.dailyOutCap + ' 分', false, 'exchangeOut', 0);
+    item('1 钻石 → 2 积分', '今日可兑 ' + CLOUD.meta.diamondOutLeft + '/' + CLOUD.meta.diamondOutCap + ' 分', false, 'exchangeD2P', 0);
   }
   section('钻石兑换弹珠');
   item('50 钻石 → 1000 弹珠', state.diamonds >= 50 ? '点击兑换' : '钻石不足', false, 'exchange', 0);
@@ -309,11 +309,14 @@ function drawShop() {
   ctx.textAlign = 'start';
 }
 function handleShopTap(it) {
-  if (it.action === 'exchangeIn' || it.action === 'exchangeOut') {
+  if (it.action === 'exchangeIn' || it.action === 'exchangeD2P') {
     if (!cloudOn()) { wx.showToast({ title: '游客模式不可兑换积分', icon: 'none' }); draw(); return; }
-    const dir = it.action === 'exchangeIn' ? 'in' : 'out';
-    const amount = CLOUD.meta.exchangeRate * 10;
-    CLOUD.exchange(dir, amount).then((r) => { state.marbles = r.marbles; if (dir === 'out') CLOUD.meta.dailyOutLeft = Math.max(0, CLOUD.meta.dailyOutLeft - 10); save(); draw(); CLOUD.toast(dir === 'in' ? '兑换成功：积分 → 弹珠' : '兑换成功：弹珠 → 积分'); }).catch((err) => { CLOUD.toast((err && err.message) || '兑换失败'); draw(); });
+    if (it.action === 'exchangeIn') {
+      CLOUD.exchangeP2M(CLOUD.meta.exchangeRate * 10).then((r) => { state.marbles = r.marbles; save(); draw(); CLOUD.toast('兑换成功：积分 → 弹珠'); }).catch((err) => { CLOUD.toast((err && err.message) || '兑换失败'); draw(); });
+    } else {
+      if (state.diamonds < 1) { CLOUD.toast('暂无钻石（钻石来自对局命中）'); draw(); return; }
+      CLOUD.exchangeD2P(1).then((r) => { state.diamonds = r.diamonds; save(); draw(); CLOUD.toast('兑换成功：钻石 → Qbao 积分 +' + CLOUD.meta.diamondToPoints); }).catch((err) => { CLOUD.toast((err && err.message) || '兑换失败'); draw(); });
+    }
     return;
   }
   const doLocal = (cat, arr, key, cur) => { const i = it.arg; if (state[key] === i) return; if (state.owned[arr].indexOf(i) >= 0) { state[key] = i; } else { const c = cat[i].cost; if (state[cur] >= c) { state[cur] -= c; state.owned[arr].push(i); state[key] = i; } else { wx.showToast({ title: cur === 'marbles' ? '弹珠不足' : '钻石不足', icon: 'none' }); draw(); return; } } };
