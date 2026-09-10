@@ -1,6 +1,0 @@
-node_modules/
-miniprogram_npm/
-.workbuddy/
-project.private.config.json
-.DS_Store
-*.log

@@ -1,9 +1,0 @@
-{
-  "name": "galton-light-game",
-  "version": "1.0.0",
-  "private": true,
-  "description": "A Matter.js Galton board game for WeChat Mini Program",
-  "dependencies": {
-    "matter-js": "^0.20.0"
-  }
-}
